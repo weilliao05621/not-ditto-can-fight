@@ -4,9 +4,13 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
 
-import "./IERC1155.sol";
-import "./NotDittoConfig.sol";
-import "../libs/Strings.sol";
+import "./interfaces/IERC1155.sol";
+import "./NFT/NotDittoConfig.sol";
+import "./NFT/NotDitto.sol";
+
+import "./Controller.sol";
+
+import "./libs/Strings.sol";
 
 // TODO: 要在特定功能上都增加檢查 ERC721 的權限
 
@@ -36,6 +40,19 @@ contract NotDittoCanFight is IERC165, ERC165, IERC1155, NotDittoConfig {
     mapping(uint256 => NotDittoAsLottery) public notDittoAsLotteries;
 
     bool public vaultIsLock = true;
+
+    address public immutable admin;
+    Controller public immutable controller;
+    NotDitto public immutable notDitto;
+
+    constructor() payable {
+        admin = msg.sender;
+        notDitto = new NotDitto(admin, address(this));
+        controller = new Controller(admin,address(this), address(notDitto));
+    }
+
+    // TODO: 完成 mint 的機制
+    function mintNotDitto() external payable {}
 
     function supportsInterface(
         bytes4 interfaceId
@@ -260,13 +277,6 @@ contract NotDittoCanFight is IERC165, ERC165, IERC1155, NotDittoConfig {
         notDittoInfos[tokenId].nftAddress = nftAddr;
         notDittoInfos[tokenId].nftId = nftTokenId;
     }
-
-    // TODO: 要寫出通用的 interface 檢查，利用該 interface 去檢查持有權
-    function _checkOwnershipOfMorphNft(
-        address nftAddress,
-        uint256 nftTokenId,
-        uint256 interfaceType
-    ) private pure returns (bool isOwner) {}
 
     function _getElementalAttribute(
         string calldata _uri
