@@ -2,5 +2,5 @@
 pragma solidity 0.8.19;
 
 interface INotDitto {
-    function mint(uint256 amount) external;
+    function mint(address minter, uint256 amount) external;
 }
