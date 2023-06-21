@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./NFT/LuckyStar.sol";
-import "./NFT/NotDittoConfig.sol";
-import "./NFT/NotDitto.sol";
+import "./NFT/NotDittoAndItems.sol";
 
 import "./libs/Strings.sol";
 import "./libs/Level.sol";
@@ -14,29 +12,15 @@ error PendingLotteryListIsFull();
 error InvalidLotteryNumberLength(string lotteryNumber);
 error CanAccessToDrawWhenNotDittoFullyGrowTo30(uint256 level);
 
-contract NotDittoCanFight is LuckyStar {
-    struct NotDittoSnapshot {
-        uint256 offlineRewardStartAt;
-        uint256 totalExp;
-        uint256 effort; // this factor will affect the upper amount of prize
-        uint256 draw; // 期數 > 如果是 0 表示還沒有參加
-        string lotteryNumber; // 開獎號碼
-    }
-
-    uint256 public constant RASIE_SUPPORT_FEE = (0.001 ether * 250) / 10000; // 2.5%
-
-    mapping(uint256 => address) public owners;
-    mapping(uint256 => NotDittoSnapshot) public notDittoSnapshots;
-
-    bool public vaultIsLock = true;
-
+contract NotDittoCanFight is NotDittoAndItems {
     // === NotDitto Lottery === //
     function withdrawLotteryPrize(uint256 tokenId) external {
         if (vaultIsLock) {
             revert VaultIsLocked();
         }
-        if (msg.sender != owners[tokenId]) {
-            revert NotOwnerOfTheNotDitto(tokenId, owners[tokenId], msg.sender);
+
+        if (!checkIsNotDittoOwner(tokenId)) {
+            revert NotOwnerOfTheNotDitto();
         }
 
         uint256 mutipler = 1; // TODO: will be calc by controll from oracle and its draw
@@ -44,7 +28,13 @@ contract NotDittoCanFight is LuckyStar {
             RASIE_SUPPORT_FEE;
         uint256 reward = mutipler * effortRefund;
 
-        notDittoSnapshots[tokenId] = NotDittoSnapshot(block.timestamp, 0, 0,0,"");
+        notDittoSnapshots[tokenId] = NotDittoSnapshot(
+            block.timestamp,
+            0,
+            0,
+            0,
+            ""
+        );
 
         payable(msg.sender).transfer(reward);
     }
@@ -56,8 +46,8 @@ contract NotDittoCanFight is LuckyStar {
             revert VaultIsLocked();
         }
 
-        if (msg.sender != owners[tokenId]) {
-            revert NotOwnerOfTheNotDitto(tokenId, owners[tokenId], msg.sender);
+        if (!checkIsNotDittoOwner(tokenId)) {
+            revert NotOwnerOfTheNotDitto();
         }
 
         _engageInLottery(tokenId, lotteryNumber);
@@ -88,12 +78,12 @@ contract NotDittoCanFight is LuckyStar {
     }
 
     // === NotDitto Level === //
-    function withdrawOfflineReward(uint256 id) external {
-        if (msg.sender != owners[id]) {
-            revert NotOwnerOfTheNotDitto(id, owners[id], msg.sender);
+    function withdrawOfflineReward(uint256 tokenId) external {
+        if (!checkIsNotDittoOwner(tokenId)) {
+            revert NotOwnerOfTheNotDitto();
         }
 
-        NotDittoSnapshot memory _snapshot = notDittoSnapshots[id];
+        NotDittoSnapshot memory _snapshot = notDittoSnapshots[tokenId];
 
         uint256 startAt = _snapshot.offlineRewardStartAt;
         uint256 effort = _snapshot.effort;
@@ -107,9 +97,9 @@ contract NotDittoCanFight is LuckyStar {
                 portion *
                 Level._calcOfflineRewardPerDay(effort, level);
 
-            notDittoSnapshots[id].offlineRewardStartAt = block.timestamp;
-            notDittoSnapshots[id].totalExp = updatedTotalExp;
-            notDittoSnapshots[id].effort = effort + 1;
+            notDittoSnapshots[tokenId].offlineRewardStartAt = block.timestamp;
+            notDittoSnapshots[tokenId].totalExp = updatedTotalExp;
+            notDittoSnapshots[tokenId].effort = effort + 1;
         }
     }
 }
