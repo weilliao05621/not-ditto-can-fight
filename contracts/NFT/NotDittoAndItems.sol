@@ -1,15 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
+import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155Receiver.sol";
+import "openzeppelin-contracts/contracts/token/ERC1155/IERC1155.sol";
 import "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import "openzeppelin-contracts/contracts/utils/introspection/ERC165.sol";
-
-import "../interfaces/IERC1155.sol";
+import "openzeppelin-contracts/contracts/utils/Address.sol";
 
 import "./NotDittoConfig.sol";
+import "./ErrorConfig.sol";
+
+// 外部呼叫的 function 要想清楚「誰會來呼叫」，它會不會被省略掉什麼檢查
 
 // TODO: 之後比賽獎勵可以獲得的星星，用來加速升等
-contract NotDittoAndItems is NotDittoConfig, IERC165, ERC165, IERC1155 {
+contract NotDittoAndItems is
+    NotDittoConfig,
+    ErrorConfig,
+    IERC165,
+    ERC165,
+    IERC1155
+{
+    event MintNotDitto(address from, address to, uint256 id, uint256 amount);
+    event Approval(address owner, address operator, uint256 id);
+    event ApprovalBatch(
+        address indexed operator,
+        uint256[] ids,
+        uint256[] values
+    );
+
+    using Address for address;
+
     uint256 public constant NOT_DITTO = 0;
     uint256 public constant BASIC_STAR = 1;
     uint256 public constant MEDIAN_STAR = 2;
@@ -21,10 +41,16 @@ contract NotDittoAndItems is NotDittoConfig, IERC165, ERC165, IERC1155 {
     uint256 public constant MAX_NOT_DITTO_SUPPLY_PER_ADDRESS = 3;
     uint256 public constant MAX_NOT_DITTO_SUPPLY = 1000;
 
+    // tokenId => owner => amount
     mapping(uint256 => mapping(address => uint256)) private _balances;
+    // tokenId => totalSuppyl
+    mapping(uint256 => uint256) private _totalSupplies;
+    // notDittoId => operator => bool
+    mapping(uint256 => mapping(address => bool)) private _approvals;
     mapping(address => mapping(address => bool)) private _operatorApprovals;
 
-    uint256 public currentNotDittoIndex;
+    // 為了減省 gas，所以會採 stack 的方式達成 re-mint
+    uint256[] public currentOrphanNotDittos;
 
     mapping(uint256 => NotDittoInfo) public notDittoInfos;
     mapping(uint256 => NotDittoSnapshot) public notDittoSnapshots;
@@ -45,39 +71,418 @@ contract NotDittoAndItems is NotDittoConfig, IERC165, ERC165, IERC1155 {
         uint256 _id,
         uint256 _value,
         bytes calldata _data
-    ) external {}
+    ) external {
+        if (_id == NOT_DITTO) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.NOT_DITTOS_ARE_ONLY_MINTABLE_AND_BURNABLE)
+            );
+        } else {
+            // TODO: approve 星星的用途還要再想想
+            bool isApproved = _from == msg.sender ||
+                isApprovedForAll(_from, msg.sender);
 
-    // TODO: 通信的機制: 可以轉讓 NFT，但會記錄 NFT 的原持有人有沒有授權
-    // 多檢查一種 approval，這樣對方可以花錢借用 NotDitto、可以增加 NotDitto 的屬性
+            if (!isApproved) {
+                revert ErrorFromErc1155(
+                    uint256(ErrorErc1155.CALLER_IS_NOT_TOKEN_OWNER_NOR_APPROVED)
+                );
+            } else {
+                _safeTransferFrom(_from, _to, _id, _value);
+            }
+        }
+    }
+
     function safeBatchTransferFrom(
         address _from,
         address _to,
-        uint256[] calldata _ids,
-        uint256[] calldata _values,
-        bytes calldata _data
-    ) external {}
+        uint256[] calldata ids,
+        uint256[] calldata values,
+        bytes calldata data
+    ) external {
+        if (ids.length != values.length) {
+            revert ErrorFromErc1155(
+                uint256(ErrorErc1155.MISMATCH_IDS_AND_AMOUNTS)
+            );
+        }
+
+        bool isApproved = _from == msg.sender ||
+            isApprovedForAll(_from, msg.sender);
+        if (!isApproved) {
+            revert ErrorFromErc1155(
+                uint256(ErrorErc1155.CALLER_IS_NOT_TOKEN_OWNER_NOR_APPROVED)
+            );
+        }
+
+        _safeBatchTransferFrom(_from, _to, ids, values);
+    }
+
+    // 不提供選擇 mint 哪一個
+    // mint 只檢查條件
+    function mintNotDitto(address nftAddress, uint256 nftId) external payable {
+        if (msg.value != MINT_PRICE) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.WRONG_MINT_PRICE)
+            );
+        }
+
+        _checkIsOwnerOfTokenId(msg.sender, nftAddress, nftId);
+
+        // 用同一個 index 去 mint，只是不同 mint 方式，更新 index 不一樣
+        uint256 currentNotDittoIndex = _totalSupplies[NOT_DITTO];
+        bool allNotDittoIsMinted = currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY;
+
+        // 如果 currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY，則要去看放養場有沒有等待被領養的百變怪
+        // 讀取新的 notDittoIndex，並更新 totalSupply
+        // 修改 totalSupply 或 orphans 狀態
+        if (allNotDittoIsMinted) {
+            // 複印
+            uint256 orphans = currentOrphanNotDittos.length;
+            if (orphans == 0) {
+                revert ErrorFromInteractWithNotDitto(
+                    uint256(ErrorNotDitto.ALL_NOT_DITTO_HAS_PARENTS)
+                );
+            }
+            // 配合 solidity 語法採用 stack 先進後出來處理
+            currentNotDittoIndex = currentOrphanNotDittos[orphans - 1];
+            currentOrphanNotDittos.pop();
+        } else {
+            currentNotDittoIndex = currentNotDittoIndex + 1;
+            _totalSupplies[NOT_DITTO] = currentNotDittoIndex;
+        }
+
+        address from = address(0);
+        address to = msg.sender;
+
+        NotDittoInfo memory notDittoInfo = NotDittoInfo({
+            owner: to,
+            nftAddress: nftAddress,
+            nftId: nftId,
+            elementalAttr: _getElementalAttribute(nftAddress, nftId)
+        });
+
+        NotDittoSnapshot memory notDittoSnapshot = NotDittoSnapshot(
+            block.timestamp,
+            0,
+            allNotDittoIsMinted ? 5 : 0,
+            0,
+            "1111" // 先熱機
+        );
+
+        notDittoInfos[currentNotDittoIndex] = notDittoInfo;
+        notDittoSnapshots[currentNotDittoIndex] = notDittoSnapshot;
+        emit MintNotDitto(from, to, currentNotDittoIndex, 1);
+
+        _safeTransferFrom(from, to, NOT_DITTO, 1);
+    }
+
+    function mintBatchNotDitto(
+        uint256 amount,
+        address[] memory nftAddresses,
+        uint256[] memory nftIds
+    ) external payable {
+        if (msg.value != MINT_PRICE * amount) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.WRONG_MINT_PRICE)
+            );
+        }
+
+        // Record Index
+        uint256 currentNotDittoIndex = _totalSupplies[NOT_DITTO];
+        // For validation
+        bool allNotDittoIsMinted = currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY;
+        uint256 orphans = currentOrphanNotDittos.length;
+
+        NotDittoInfo memory notDittoInfo = NotDittoInfo(
+            1,
+            address(1),
+            0,
+            msg.sender
+        );
+
+        NotDittoSnapshot memory notDittoSnapshot = NotDittoSnapshot(
+            block.timestamp,
+            0,
+            0,
+            0,
+            "1111" // 先熱機
+        );
+
+        // 3_000
+        if (allNotDittoIsMinted) {
+            if (orphans < amount) {
+                revert ErrorFromInteractWithNotDitto(
+                    uint256(ErrorNotDitto.ALL_NOT_DITTO_HAS_PARENTS)
+                );
+            } else {
+                for (uint256 i = 0; i < amount; ) {
+                    _checkIsOwnerOfTokenId(
+                        msg.sender,
+                        nftAddresses[i],
+                        nftIds[i]
+                    );
+
+                    unchecked {
+                        // orphan is the index of NotDitto
+                        uint256 orphan = currentOrphanNotDittos[
+                            orphans - i - 1
+                        ];
+
+                        notDittoInfo.nftAddress = nftAddresses[i];
+                        notDittoInfo.nftId = nftIds[i];
+                        notDittoInfo.elementalAttr = _getElementalAttribute(
+                            nftAddresses[i],
+                            nftIds[i]
+                        );
+
+                        notDittoInfos[orphan] = notDittoInfo;
+                        notDittoSnapshots[orphan] = notDittoSnapshot;
+                        ++i;
+                    }
+                }
+            }
+        } else {
+            if (orphans < amount) {
+                revert ErrorFromInteractWithNotDitto(
+                    uint256(ErrorNotDitto.ALL_NOT_DITTO_HAS_PARENTS)
+                );
+            } else {
+                // 還可以誕生的總數
+                uint256 notDittosBorn = MAX_NOT_DITTO_SUPPLY -
+                    currentNotDittoIndex;
+
+                // 這次會誕生的數量
+                uint256 newBornNotDitto = notDittosBorn > amount
+                    ? amount
+                    : notDittosBorn;
+                // 需要領養的數量
+                uint256 orphansAdopted = amount - newBornNotDitto;
+                bool hasMoreBornNotDitto = newBornNotDitto > orphansAdopted;
+                // 看用哪一個去跑迴圈
+                uint256 loopTimes = hasMoreBornNotDitto
+                    ? newBornNotDitto
+                    : orphansAdopted;
+
+                for (uint256 i = 0; i < loopTimes; ) {
+                    _checkIsOwnerOfTokenId(
+                        msg.sender,
+                        nftAddresses[i],
+                        nftIds[i]
+                    );
+                    unchecked {
+                        if (newBornNotDitto == 3) {
+                            currentNotDittoIndex = currentNotDittoIndex + 1;
+                        } else if (newBornNotDitto == 2) {
+                            currentNotDittoIndex = i == 2
+                                ? currentOrphanNotDittos[orphans - i - 1]
+                                : currentNotDittoIndex + 1;
+                            if (i == 2) {
+                                currentOrphanNotDittos.pop();
+                                notDittoSnapshot.effort = 5;
+                            }
+                        } else {
+                            currentNotDittoIndex = i == 1
+                                ? currentOrphanNotDittos[orphans - i - 1]
+                                : currentNotDittoIndex + 1;
+                            if (i > 0) {
+                                currentOrphanNotDittos.pop();
+                                notDittoSnapshot.effort = 5;
+                            }
+                        }
+
+                        notDittoInfo.nftAddress = nftAddresses[i];
+                        notDittoInfo.nftId = nftIds[i];
+                        notDittoInfo.elementalAttr = _getElementalAttribute(
+                            nftAddresses[i],
+                            nftIds[i]
+                        );
+
+                        notDittoInfos[currentNotDittoIndex] = notDittoInfo;
+                        notDittoSnapshots[
+                            currentNotDittoIndex
+                        ] = notDittoSnapshot;
+
+                        ++i;
+                        emit MintNotDitto(
+                            address(0),
+                            msg.sender,
+                            currentNotDittoIndex,
+                            1
+                        );
+                    }
+                }
+
+                _totalSupplies[NOT_DITTO] =
+                    _totalSupplies[NOT_DITTO] +
+                    newBornNotDitto;
+            }
+        }
+        _safeTransferFrom(address(0), msg.sender, NOT_DITTO, amount);
+    }
 
     function balanceOf(
         address _owner,
         uint256 _id
-    ) external view returns (uint256) {
+    ) public view returns (uint256) {
+        if (_owner == address(0)) {
+            revert ErrorFromErc1155(
+                uint256(ErrorErc1155.ZERO_ADDRESS_IS_NOT_AVAIABLE_OWNER)
+            );
+        }
+
         return _balances[_id][_owner];
+    }
+
+    // 僅支援 NotDitto 去做單獨 Approval，星星目前是自己使用
+    // advanced: 星星未來可以考慮質押，會有跟 NotDitto 升等很像的機制
+    function approve(address _operator, uint256 _id, bool approved) external {
+        if (_operator == address(0)) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.ZERO_ADDRESS_IS_NOT_AVAIABLE_OPERATOR)
+            );
+        }
+
+        address owner = ownerOf(_id);
+        if (owner != msg.sender) {
+            revert ErrorFromErc1155(
+                uint256(ErrorErc1155.CALLER_IS_NOT_TOKEN_OWNER_NOR_APPROVED)
+            );
+        }
+
+        _approvals[_id][_operator] = approved;
+        emit Approval(owner, _operator, _id);
     }
 
     function balanceOfBatch(
         address[] calldata _owners,
         uint256[] calldata _ids
-    ) external view returns (uint256[] memory) {}
+    ) public view returns (uint256[] memory) {
+        if (_owners.length != _ids.length) {
+            uint256 errorCode = uint256(ErrorErc1155.MISMATCH_ACCOUNTS_AND_IDS);
+            revert ErrorFromErc1155(errorCode);
+        }
 
-    function setApprovalForAll(address _operator, bool _approved) external {}
+        uint256[] memory batchBalances = new uint256[](_owners.length);
+
+        for (uint256 i = 0; i < _owners.length; ) {
+            batchBalances[i] = balanceOf(_owners[i], _ids[i]);
+            unchecked {
+                ++i;
+            }
+        }
+
+        return batchBalances;
+    }
+
+    // TODO: 目前僅支援 NotDitto 可以全部有動用權 > 目前 star 的 transferFrom 不會檢查 approve，只會檢查 msg.sender 是不是 _from
+    function setApprovalForAll(address _operator, bool _approved) external {
+        if (_operator == address(0)) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.ZERO_ADDRESS_IS_NOT_AVAIABLE_OPERATOR)
+            );
+        }
+
+        _operatorApprovals[msg.sender][_operator] = _approved;
+        emit ApprovalForAll(msg.sender, _operator, _approved);
+    }
 
     function isApprovedForAll(
         address _owner,
         address _operator
-    ) external view returns (bool) {}
+    ) public view returns (bool) {}
 
     function ownerOf(uint256 tokenId) public view returns (address owner) {
         owner = notDittoInfos[tokenId].owner;
+    }
+
+    function _safeTransferFrom(
+        address _from,
+        address _to,
+        uint256 id,
+        uint256 amount
+    ) internal {
+        if (id == NOT_DITTO) {
+            _transferNotDitto(_from, _to, amount);
+        } else {
+            _transferStar(_from, _to, id, amount);
+        }
+
+        emit TransferSingle(msg.sender, _from, _to, id, amount);
+        _doSafeTransferAcceptanceCheck(msg.sender, _from, _to, id, amount, "");
+    }
+
+    // 這個 function 只支援 Stars
+    function _safeBatchTransferFrom(
+        address _from,
+        address _to,
+        uint256[] memory ids,
+        uint256[] memory amounts
+    ) internal {
+        for (uint256 i = 0; i < ids.length; ++i) {
+            uint256 id = ids[i];
+            if (id == NOT_DITTO) {
+                revert ErrorFromInteractWithNotDitto(
+                    uint256(
+                        ErrorNotDitto.NOT_DITTOS_ARE_ONLY_MINTABLE_AND_BURNABLE
+                    )
+                );
+            }
+            uint256 amount = amounts[i];
+            _transferStar(_from, _to, id, amount);
+        }
+
+        emit TransferBatch(msg.sender, _from, _to, ids, amounts);
+
+        _doSafeBatchTransferAcceptanceCheck(
+            msg.sender,
+            _from,
+            _to,
+            ids,
+            amounts,
+            ""
+        );
+    }
+
+    function _transferNotDitto(
+        address _from,
+        address _to,
+        uint256 amount
+    ) internal {
+        unchecked {
+            if (_from != address(0) && _to == address(0)) {
+                uint256 fromBalance = _balances[NOT_DITTO][_from];
+                require(fromBalance >= amount);
+                _balances[NOT_DITTO][_from] = fromBalance - amount;
+            } else if (_from == address(0) && _to != address(0)) {
+                uint256 toBalances = _balances[NOT_DITTO][_to];
+                require(toBalances < MAX_NOT_DITTO_SUPPLY_PER_ADDRESS);
+                require(
+                    toBalances + amount <= MAX_NOT_DITTO_SUPPLY_PER_ADDRESS
+                );
+                _balances[NOT_DITTO][_to] = toBalances + amount;
+            } else {
+                revert();
+            }
+        }
+    }
+
+    function _transferStar(
+        address _from,
+        address _to,
+        uint256 id,
+        uint256 amount
+    ) internal {
+        uint256 fromBalance = _balances[id][_from];
+
+        if (fromBalance < amount) {
+            revert ErrorFromErc1155(
+                uint256(ErrorErc1155.INSUFFICIENT_BALANCE_FOR_TRANSFER)
+            );
+        }
+
+        unchecked {
+            _balances[id][_from] = fromBalance - amount;
+        }
+
+        _balances[id][_to] += amount;
     }
 
     function _replaceMorphNFT(
@@ -107,13 +512,25 @@ contract NotDittoAndItems is NotDittoConfig, IERC165, ERC165, IERC1155 {
         isOwner = msg.sender == ownerOf(tokenId);
     }
 
-    function checkIsOwnerOfTokenId(
+    function _checkIsOwnerOfTokenId(
         address player,
         address nftAddr,
         uint256 tokenId
-    ) external view returns (bool isOwner) {
+    ) internal view returns (bool isOwner) {
+        uint256 errorCode;
+
+        if (nftAddr == address(0)) {
+            errorCode = uint256(
+                ErrorNotDitto.NOT_DITTO_IS_UNHAPPY_TO_MORPH_ZERO_ADDRESS
+            );
+            revert ErrorFromInteractWithNotDitto(errorCode);
+        }
+
         if (nftAddr == address(this)) {
-            revert NotAllowNotDittoToBeSelfMinted();
+            errorCode = uint256(
+                ErrorNotDitto.NOT_DITTO_IS_UNHAPPY_TO_MORPH_ITSELF
+            );
+            revert ErrorFromInteractWithNotDitto(errorCode);
         }
 
         bytes memory payload = abi.encodeWithSignature(
@@ -121,13 +538,78 @@ contract NotDittoAndItems is NotDittoConfig, IERC165, ERC165, IERC1155 {
             tokenId
         );
         (bool success, bytes memory rawOwner) = nftAddr.staticcall(payload);
-        require(success, "Controller: failed to call NFT's ownerOf()");
+        require(success, "NotDitto: failed to call ERC721's ownerOf()");
         isOwner = abi.decode(rawOwner, (address)) == player;
     }
 
+    // 0 - 15 對應 16 種屬性，沒有普通和幽靈
     function _getElementalAttribute(
-        string calldata _uri
-    ) private pure returns (uint256 attribute) {
-        attribute = uint8(bytes1(keccak256((abi.encodePacked(_uri))))) / 15;
+        address nftAddress,
+        uint256 nftTokenId
+    ) private pure returns (uint256) {
+        bytes1 attributeHash = bytes1(
+            keccak256((abi.encodePacked(nftAddress, nftTokenId)))
+        );
+        return uint8(attributeHash) / 15;
+    }
+
+    function _doSafeBatchTransferAcceptanceCheck(
+        address operator,
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) private {
+        if (to.isContract()) {
+            try
+                IERC1155Receiver(to).onERC1155BatchReceived(
+                    operator,
+                    from,
+                    ids,
+                    amounts,
+                    data
+                )
+            returns (bytes4 response) {
+                if (
+                    response != IERC1155Receiver.onERC1155BatchReceived.selector
+                ) {
+                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch {
+                revert("ERC1155: transfer to non-ERC1155Receiver implementer");
+            }
+        }
+    }
+
+    function _doSafeTransferAcceptanceCheck(
+        address operator,
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) private {
+        if (to.isContract()) {
+            try
+                IERC1155Receiver(to).onERC1155Received(
+                    operator,
+                    from,
+                    id,
+                    amount,
+                    data
+                )
+            returns (bytes4 response) {
+                if (response != IERC1155Receiver.onERC1155Received.selector) {
+                    revert("ERC1155: ERC1155Receiver rejected tokens");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch {
+                revert("ERC1155: transfer to non-ERC1155Receiver implementer");
+            }
+        }
     }
 }

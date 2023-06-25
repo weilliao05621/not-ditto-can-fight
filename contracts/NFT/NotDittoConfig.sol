@@ -1,18 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-error OnlyGameContractCanCall();
-error MaxNotDittoSupplyPerAddressReached();
-error MaxNotDittoSupplyReached();
-error NotAllowNotDittoToBeSelfMinted();
-error NotOwnerOfTheNotDitto();
-error NotDittoIsUnhappyToMorphZeroAddress();
-
 contract NotDittoConfig {
     struct NotDittoInfo {
         uint256 nftId; // record NFT for morphing
         address nftAddress; // record NFT for morphing
-        ElementalAttribute elementalAttr;
+        uint256 elementalAttr;
         address owner;
     }
 
@@ -22,25 +15,5 @@ contract NotDittoConfig {
         uint256 effort; // this factor will affect the upper amount of prize
         uint256 draw; // 期數 > 如果是 0 表示還沒有參加
         string lotteryNumber; // 開獎號碼
-    }
-
-    // TODO: this may be stored off-chain & calculated by web2 server
-    enum ElementalAttribute {
-        FIRE,
-        WATER,
-        GRASS,
-        ELECTRIC,
-        ICE,
-        FIGHTING,
-        POISON,
-        GROUND,
-        FLYING,
-        PSYCHIC,
-        BUG,
-        ROCK,
-        DARK,
-        DRAGON,
-        STEEL,
-        FAIRY
     }
 }
