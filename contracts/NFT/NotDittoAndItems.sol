@@ -47,8 +47,7 @@ contract NotDittoAndItems is
     mapping(uint256 => uint256) private _totalSupplies;
     // notDittoId => operator => bool
     mapping(uint256 => mapping(address => bool)) private _approvals;
-    // 不支援 approveAll
-    // mapping(address => mapping(address => bool)) private _operatorApprovals;
+    mapping(address => mapping(address => bool)) private _operatorApprovals;
 
     // 為了減省 gas，所以會採 stack 的方式達成 re-mint
     uint256[] public currentOrphanNotDittos;
@@ -78,6 +77,7 @@ contract NotDittoAndItems is
                 uint256(ErrorNotDitto.NOT_DITTOS_ARE_ONLY_MINTABLE_AND_BURNABLE)
             );
         } else {
+            // TODO: approve 星星的用途還要再想想
             bool isApproved = _from == msg.sender ||
                 isApprovedForAll(_from, msg.sender);
 
@@ -86,14 +86,11 @@ contract NotDittoAndItems is
                     uint256(ErrorErc1155.CALLER_IS_NOT_TOKEN_OWNER_NOR_APPROVED)
                 );
             } else {
-                //  檢查星星的數量 > 進行 NotDitto approve 時，也要提供一定的星星糖當抵押
                 _safeTransferFrom(_from, _to, _id, _value);
             }
         }
     }
 
-    // TODO: 通信的機制: 可以轉讓 NFT，但會記錄 NFT 的原持有人有沒有授權
-    // 多檢查一種 approval，這樣對方可以花錢借用 NotDitto、可以增加 NotDitto 的屬性
     function safeBatchTransferFrom(
         address _from,
         address _to,
@@ -336,7 +333,7 @@ contract NotDittoAndItems is
 
     // 僅支援 NotDitto 去做單獨 Approval，星星目前是自己使用
     // advanced: 星星未來可以考慮質押，會有跟 NotDitto 升等很像的機制
-    function approve(address _operator, uint256 _id) external {
+    function approve(address _operator, uint256 _id, bool approved) external {
         if (_operator == address(0)) {
             revert ErrorFromInteractWithNotDitto(
                 uint256(ErrorNotDitto.ZERO_ADDRESS_IS_NOT_AVAIABLE_OPERATOR)
@@ -350,7 +347,7 @@ contract NotDittoAndItems is
             );
         }
 
-        _approvals[_id][_operator] = true;
+        _approvals[_id][_operator] = approved;
         emit Approval(owner, _operator, _id);
     }
 
@@ -375,8 +372,17 @@ contract NotDittoAndItems is
         return batchBalances;
     }
 
-    // TODO: 目前僅支援 NotDitto 可以全部有動用權 > transferFrom 本身不會檢查 approve (但這樣會有動用別人的星星的問題)
-    function setApprovalForAll(address _operator, bool _approved) external {}
+    // TODO: 目前僅支援 NotDitto 可以全部有動用權 > 目前 star 的 transferFrom 不會檢查 approve，只會檢查 msg.sender 是不是 _from
+    function setApprovalForAll(address _operator, bool _approved) external {
+        if (_operator == address(0)) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.ZERO_ADDRESS_IS_NOT_AVAIABLE_OPERATOR)
+            );
+        }
+
+        _operatorApprovals[msg.sender][_operator] = _approved;
+        emit ApprovalForAll(msg.sender, _operator, _approved);
+    }
 
     function isApprovedForAll(
         address _owner,
@@ -387,13 +393,6 @@ contract NotDittoAndItems is
         owner = notDittoInfos[tokenId].owner;
     }
 
-    /* TODO:
-        1. 初始化：要 mint 新的 NotDitto
-        2. 初始化：要 mint 新的 幸運星星
-        3. 轉讓：要轉讓 NotDitto
-        4. [advanced] 轉讓：要轉讓 幸運星星
-        5. [advanced] 複印：NotDitto 的持有權是另一個合約
-    */
     function _safeTransferFrom(
         address _from,
         address _to,
@@ -442,8 +441,6 @@ contract NotDittoAndItems is
         );
     }
 
-    // 只能做 mint 和 burn 的使用
-    // 單純做 balance 的加減與判斷
     function _transferNotDitto(
         address _from,
         address _to,
@@ -467,7 +464,6 @@ contract NotDittoAndItems is
         }
     }
 
-    // 這是給玩家用的 > TODO: 想看看兩者要如何分拆
     function _transferStar(
         address _from,
         address _to,
