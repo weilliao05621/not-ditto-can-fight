@@ -36,7 +36,7 @@ contract NotDittoCanFight is NotDittoAndItems {
             ""
         );
 
-        payable(msg.sender).transfer(reward);
+        payable(msg.sender).transfer(reward); // 改用 WETH 來進行
     }
 
     // 確認是否要拿滿等的 NotDitto 參賽
@@ -82,7 +82,7 @@ contract NotDittoCanFight is NotDittoAndItems {
         if (!checkIsNotDittoOwner(tokenId)) {
             revert NotOwnerOfTheNotDitto();
         }
-
+        // TODO: 如果是 0 等要提領，會把 allowTransfered 調成 false 
         NotDittoSnapshot memory _snapshot = notDittoSnapshots[tokenId];
 
         uint256 startAt = _snapshot.offlineRewardStartAt;
