@@ -3,18 +3,15 @@ pragma solidity 0.8.19;
 
 import "./NFT/NotDittoAndItems.sol";
 
-import "./libs/Strings.sol";
 import "./libs/Level.sol";
+import "./libs/Lottery.sol";
 
 error VaultIsLocked();
-error NotOnPendingLotteryList();
-error PendingLotteryListIsFull();
-error InvalidLotteryNumberLength(string lotteryNumber);
 error CanAccessToDrawWhenNotDittoFullyGrowTo30(uint256 level);
 
 contract NotDittoCanFight is NotDittoAndItems {
     struct PlaySnapshot {
-        string lotteryNumber;
+        uint256[4] lotteryNumber;
         uint256 effort;
         bool engagedLottery;
     }
@@ -31,13 +28,13 @@ contract NotDittoCanFight is NotDittoAndItems {
         if (vaultIsLock) {
             revert VaultIsLocked();
         }
+
         uint256[3] memory _engagedLotteryList = engagedLotteryList[msg.sender];
         uint256 reward;
 
         for (uint256 i = 0; i < _engagedLotteryList.length; ) {
-            uint256 notDittoIndex = _engagedLotteryList[
-                _engagedLotteryList.length - 1
-            ];
+            uint256 lotteryIndex = _engagedLotteryList.length - 1;
+            uint256 notDittoIndex = _engagedLotteryList[lotteryIndex];
 
             bytes32 playerDrawHash = keccak256(
                 abi.encodePacked(msg.sender, notDittoIndex)
@@ -46,20 +43,29 @@ contract NotDittoCanFight is NotDittoAndItems {
             PlaySnapshot memory playerSnapshot = playerSnapshots[draw][
                 playerDrawHash
             ];
-            
+
+            playerSnapshots[draw][playerDrawHash].engagedLottery = false;
+            delete _engagedLotteryList[lotteryIndex];
+
             require(playerSnapshot.engagedLottery);
 
-            uint256 mutipler = 1; // TODO: will be calc by controll from oracle and its draw
+            uint256 factor = Lottery._checkLotteryPrize(
+                draws[draw],
+                playerSnapshot.lotteryNumber
+            );
+
             uint256 effortRefund = playerSnapshot.effort * RASIE_SUPPORT_FEE;
-            reward += mutipler * effortRefund;
+            reward += Lottery._calcPrizeWithFactor(effortRefund, factor);
         }
 
-        payable(msg.sender).transfer(reward); // 改用 WETH 來進行
+        engagedLotteryList[msg.sender] = _engagedLotteryList;
+        payable(msg.sender).transfer(reward); // TODO: 改用 WETH 來進行
     }
 
-    // 確認是否要拿滿等的 NotDitto 參賽
-    // TODO: 要確定是比較排列組合，而不是單純比數字
-    function engageInLottery(uint256 tokenId, uint256 lotteryNumber) external {
+    function engageInLottery(
+        uint256 tokenId,
+        uint256[4] calldata lotteryNumber
+    ) external {
         if (vaultIsLock) {
             revert VaultIsLocked();
         }
@@ -68,10 +74,6 @@ contract NotDittoCanFight is NotDittoAndItems {
             revert NotOwnerOfTheNotDitto();
         }
 
-        _engageInLottery(tokenId, lotteryNumber);
-    }
-
-    function _engageInLottery(uint256 tokenId, uint256 lotteryNumber) internal {
         NotDittoSnapshot memory _notDittoSnapshot = notDittoSnapshots[tokenId];
         uint256 totalExp = _notDittoSnapshot.totalExp;
         uint256 currentLevel = Level._getCurrentLevel(totalExp);
@@ -80,10 +82,6 @@ contract NotDittoCanFight is NotDittoAndItems {
             revert CanAccessToDrawWhenNotDittoFullyGrowTo30(currentLevel);
         }
 
-        string memory lotteryNumberToString = Strings.toLotteryNumberString(
-            lotteryNumber
-        );
-
         _burnNotDitto(tokenId, false);
 
         uint256 nextDraw = latestDraw + 1; // TODO: draw 會變成記在 oracle 上的變數
@@ -91,7 +89,7 @@ contract NotDittoCanFight is NotDittoAndItems {
             abi.encodePacked(msg.sender, tokenId)
         );
         playerSnapshots[nextDraw][playerDrawHash] = PlaySnapshot(
-            lotteryNumberToString,
+            lotteryNumber,
             _notDittoSnapshot.effort,
             true
         );
