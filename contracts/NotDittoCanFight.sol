@@ -13,28 +13,46 @@ error InvalidLotteryNumberLength(string lotteryNumber);
 error CanAccessToDrawWhenNotDittoFullyGrowTo30(uint256 level);
 
 contract NotDittoCanFight is NotDittoAndItems {
+    struct PlaySnapshot {
+        string lotteryNumber;
+        uint256 effort;
+        bool engagedLottery;
+    }
+
+    uint256 public constant EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED = 7;
+    mapping(uint256 => mapping(bytes32 => PlaySnapshot)) public playerSnapshots;
+    mapping(address => uint256[3]) public engagedLotteryList;
+
+    uint256 public latestDraw;
+    mapping(uint256 => uint256[4]) public draws;
+
     // === NotDitto Lottery === //
-    function withdrawLotteryPrize(uint256 tokenId) external {
+    function withdrawLotteryPrize(uint256 draw) external {
         if (vaultIsLock) {
             revert VaultIsLocked();
         }
+        uint256[3] memory _engagedLotteryList = engagedLotteryList[msg.sender];
+        uint256 reward;
 
-        if (!checkIsNotDittoOwner(tokenId)) {
-            revert NotOwnerOfTheNotDitto();
+        for (uint256 i = 0; i < _engagedLotteryList.length; ) {
+            uint256 notDittoIndex = _engagedLotteryList[
+                _engagedLotteryList.length - 1
+            ];
+
+            bytes32 playerDrawHash = keccak256(
+                abi.encodePacked(msg.sender, notDittoIndex)
+            );
+
+            PlaySnapshot memory playerSnapshot = playerSnapshots[draw][
+                playerDrawHash
+            ];
+            
+            require(playerSnapshot.engagedLottery);
+
+            uint256 mutipler = 1; // TODO: will be calc by controll from oracle and its draw
+            uint256 effortRefund = playerSnapshot.effort * RASIE_SUPPORT_FEE;
+            reward += mutipler * effortRefund;
         }
-
-        uint256 mutipler = 1; // TODO: will be calc by controll from oracle and its draw
-        uint256 effortRefund = notDittoSnapshots[tokenId].effort *
-            RASIE_SUPPORT_FEE;
-        uint256 reward = mutipler * effortRefund;
-
-        notDittoSnapshots[tokenId] = NotDittoSnapshot(
-            block.timestamp,
-            0,
-            0,
-            0,
-            ""
-        );
 
         payable(msg.sender).transfer(reward); // 改用 WETH 來進行
     }
@@ -54,27 +72,55 @@ contract NotDittoCanFight is NotDittoAndItems {
     }
 
     function _engageInLottery(uint256 tokenId, uint256 lotteryNumber) internal {
-        string memory lotteryNumberToString = Strings.toLotteryNumberString(
-            lotteryNumber
-        );
-
-        NotDittoSnapshot memory _snapshot = notDittoSnapshots[tokenId];
-
-        uint256 totalExp = notDittoSnapshots[tokenId].totalExp;
-
+        NotDittoSnapshot memory _notDittoSnapshot = notDittoSnapshots[tokenId];
+        uint256 totalExp = _notDittoSnapshot.totalExp;
         uint256 currentLevel = Level._getCurrentLevel(totalExp);
 
         if (currentLevel != 30) {
             revert CanAccessToDrawWhenNotDittoFullyGrowTo30(currentLevel);
         }
 
-        notDittoSnapshots[tokenId].totalExp = 0; // prevent suddenly draw again
+        string memory lotteryNumberToString = Strings.toLotteryNumberString(
+            lotteryNumber
+        );
 
-        uint256 nextDraw = 1; // TODO: controller will fetch draw
-        _snapshot.draw = nextDraw;
-        _snapshot.lotteryNumber = lotteryNumberToString;
+        _burnNotDitto(tokenId, false);
 
-        notDittoSnapshots[tokenId] = _snapshot;
+        uint256 nextDraw = latestDraw + 1; // TODO: draw 會變成記在 oracle 上的變數
+        bytes32 playerDrawHash = keccak256(
+            abi.encodePacked(msg.sender, tokenId)
+        );
+        playerSnapshots[nextDraw][playerDrawHash] = PlaySnapshot(
+            lotteryNumberToString,
+            _notDittoSnapshot.effort,
+            true
+        );
+        engagedLotteryList[msg.sender][
+            engagedLotteryList[msg.sender].length
+        ] = tokenId;
+    }
+
+    // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
+    function takeUnattendedNotDittoToOrphanage(uint256 id) public {
+        NotDittoInfo memory _info = notDittoInfos[id];
+        require(_info.owner != address(0));
+
+        NotDittoSnapshot memory _snapshot = notDittoSnapshots[id];
+
+        uint256 _offlineRewardStartAt = _snapshot.offlineRewardStartAt;
+
+        uint256 portion = Level._getOfflineRewardPortion(
+            block.timestamp - _offlineRewardStartAt
+        );
+        bool hasTooMuchPortion = portion /
+            Level.EXP_DECIMALS /
+            EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED >
+            0;
+
+        require(hasTooMuchPortion);
+
+        _burnNotDitto(id, true);
+        // TODO: assign payment if one has took care of our NotDitto
     }
 
     // === NotDitto Level === //
@@ -82,7 +128,7 @@ contract NotDittoCanFight is NotDittoAndItems {
         if (!checkIsNotDittoOwner(tokenId)) {
             revert NotOwnerOfTheNotDitto();
         }
-        // TODO: 如果是 0 等要提領，會把 allowTransfered 調成 false 
+        // TODO: 如果是 0 等要提領，會把 allowTransfered 調成 false
         NotDittoSnapshot memory _snapshot = notDittoSnapshots[tokenId];
 
         uint256 startAt = _snapshot.offlineRewardStartAt;

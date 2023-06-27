@@ -13,7 +13,5 @@ contract NotDittoConfig {
         uint256 offlineRewardStartAt;
         uint256 totalExp;
         uint256 effort; // this factor will affect the upper amount of prize
-        uint256 draw; // 期數 > 如果是 0 表示還沒有參加
-        string lotteryNumber; // 開獎號碼
     }
 }
