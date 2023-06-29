@@ -52,6 +52,7 @@ contract NotDittoAndItems is
     // 為了減省 gas，所以會採 stack 的方式達成 re-mint
     uint256[] public currentOrphanNotDittos;
 
+    mapping(bytes32 => bool) public morphedNftHash;
     mapping(uint256 => NotDittoInfo) public notDittoInfos;
     mapping(uint256 => NotDittoSnapshot) public notDittoSnapshots;
 
@@ -126,6 +127,12 @@ contract NotDittoAndItems is
 
         _checkIsOwnerOfTokenId(msg.sender, nftAddress, nftId);
 
+        bytes32 nftInfoHash = keccak256(abi.encodePacked(nftAddress, nftId));
+        bool existed = morphedNftHash[nftInfoHash];
+
+        require(!existed);
+        morphedNftHash[nftInfoHash] = true;
+
         // 用同一個 index 去 mint，只是不同 mint 方式，更新 index 不一樣
         uint256 currentNotDittoIndex = _totalSupplies[NOT_DITTO];
         bool allNotDittoIsMinted = currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY;
@@ -158,13 +165,11 @@ contract NotDittoAndItems is
             nftId: nftId,
             elementalAttr: _getElementalAttribute(nftAddress, nftId)
         });
-
+        uint256 effort = allNotDittoIsMinted ? 5 : 0;
         NotDittoSnapshot memory notDittoSnapshot = NotDittoSnapshot(
             block.timestamp,
             0,
-            allNotDittoIsMinted ? 5 : 0,
-            0,
-            "1111" // 先熱機
+            effort
         );
 
         notDittoInfos[currentNotDittoIndex] = notDittoInfo;
@@ -197,13 +202,11 @@ contract NotDittoAndItems is
             0,
             msg.sender
         );
-
+        uint256 effort = allNotDittoIsMinted ? 5 : 0;
         NotDittoSnapshot memory notDittoSnapshot = NotDittoSnapshot(
             block.timestamp,
             0,
-            0,
-            0,
-            "1111" // 先熱機
+            effort
         );
 
         // 3_000
@@ -220,7 +223,15 @@ contract NotDittoAndItems is
                         nftIds[i]
                     );
 
+                    bytes32 nftInfoHash = keccak256(
+                        abi.encodePacked(nftAddresses[i], nftIds[i])
+                    );
+                    bool existed = morphedNftHash[nftInfoHash];
+
+                    require(!existed);
+
                     unchecked {
+                        morphedNftHash[nftInfoHash] = true;
                         // orphan is the index of NotDitto
                         uint256 orphan = currentOrphanNotDittos[
                             orphans - i - 1
@@ -267,22 +278,26 @@ contract NotDittoAndItems is
                         nftAddresses[i],
                         nftIds[i]
                     );
+
+                    bytes32 nftInfoHash = keccak256(
+                        abi.encodePacked(nftAddresses[i], nftIds[i])
+                    );
+                    bool existed = morphedNftHash[nftInfoHash];
+
+                    require(!existed);
+
                     unchecked {
+                        morphedNftHash[nftInfoHash] = true;
                         if (newBornNotDitto == 3) {
                             currentNotDittoIndex = currentNotDittoIndex + 1;
-                        } else if (newBornNotDitto == 2) {
-                            currentNotDittoIndex = i == 2
-                                ? currentOrphanNotDittos[orphans - i - 1]
-                                : currentNotDittoIndex + 1;
-                            if (i == 2) {
-                                currentOrphanNotDittos.pop();
-                                notDittoSnapshot.effort = 5;
-                            }
                         } else {
-                            currentNotDittoIndex = i == 1
+                            bool isOrphan = newBornNotDitto == 2
+                                ? i > 1
+                                : i > 0;
+                            currentNotDittoIndex = isOrphan
                                 ? currentOrphanNotDittos[orphans - i - 1]
                                 : currentNotDittoIndex + 1;
-                            if (i > 0) {
+                            if (isOrphan) {
                                 currentOrphanNotDittos.pop();
                                 notDittoSnapshot.effort = 5;
                             }
@@ -441,6 +456,25 @@ contract NotDittoAndItems is
         );
     }
 
+    function _burnNotDitto(uint256 id, bool isPendingOrphan) internal {
+        // 檢查是否為 NotDitto 的 owner 要參加抽獎
+        address owner = notDittoInfos[id].owner;
+        require(isPendingOrphan || owner == msg.sender);
+        require(owner != address(0));
+
+        NotDittoInfo memory _info = notDittoInfos[id];
+
+        bytes32 nftInfoHash = keccak256(
+            abi.encodePacked(_info.nftAddress, _info.nftId)
+        );
+
+        notDittoInfos[id].owner = address(0);
+        currentOrphanNotDittos[currentOrphanNotDittos.length] = id;
+        morphedNftHash[nftInfoHash] = false;
+
+        _transferNotDitto(owner, address(0), 1);
+    }
+
     function _transferNotDitto(
         address _from,
         address _to,
@@ -510,6 +544,14 @@ contract NotDittoAndItems is
         uint256 tokenId
     ) public view returns (bool isOwner) {
         isOwner = msg.sender == ownerOf(tokenId);
+    }
+
+    function checkIsExistedMorphedNft(
+        address nftAddress,
+        uint256 nftId
+    ) public view returns (bool existed) {
+        bytes32 nftInfoHash = keccak256(abi.encodePacked(nftAddress, nftId));
+        existed = morphedNftHash[nftInfoHash];
     }
 
     function _checkIsOwnerOfTokenId(

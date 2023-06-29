@@ -71,6 +71,6 @@ library Level {
         if (totalExp < 24603750) level = 27;
         if (totalExp < 27440000) level = 28;
         if (totalExp < 30486250) level = 29;
-        if (totalExp < 33750000) level = 30;
+        level = 30;
     }
 }
