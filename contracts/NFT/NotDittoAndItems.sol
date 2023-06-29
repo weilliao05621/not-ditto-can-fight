@@ -290,19 +290,14 @@ contract NotDittoAndItems is
                         morphedNftHash[nftInfoHash] = true;
                         if (newBornNotDitto == 3) {
                             currentNotDittoIndex = currentNotDittoIndex + 1;
-                        } else if (newBornNotDitto == 2) {
-                            currentNotDittoIndex = i == 2
-                                ? currentOrphanNotDittos[orphans - i - 1]
-                                : currentNotDittoIndex + 1;
-                            if (i == 2) {
-                                currentOrphanNotDittos.pop();
-                                notDittoSnapshot.effort = 5;
-                            }
                         } else {
-                            currentNotDittoIndex = i == 1
+                            bool isOrphan = newBornNotDitto == 2
+                                ? i > 1
+                                : i > 0;
+                            currentNotDittoIndex = isOrphan
                                 ? currentOrphanNotDittos[orphans - i - 1]
                                 : currentNotDittoIndex + 1;
-                            if (i > 0) {
+                            if (isOrphan) {
                                 currentOrphanNotDittos.pop();
                                 notDittoSnapshot.effort = 5;
                             }
