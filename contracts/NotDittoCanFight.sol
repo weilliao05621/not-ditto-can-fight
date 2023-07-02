@@ -2,6 +2,7 @@
 pragma solidity 0.8.19;
 
 import "./NFT/NotDittoAndItems.sol";
+import {LotteryAndFight} from "./Oracle/RandomNumber.sol";
 
 import "./libs/Level.sol";
 import "./libs/Lottery.sol";
@@ -9,7 +10,7 @@ import "./libs/Lottery.sol";
 error VaultIsLocked();
 error CanAccessToDrawWhenNotDittoFullyGrowTo30(uint256 level);
 
-contract NotDittoCanFight is NotDittoAndItems {
+contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
     struct PlaySnapshot {
         uint256[4] lotteryNumber;
         uint256 effort;
@@ -17,23 +18,43 @@ contract NotDittoCanFight is NotDittoAndItems {
     }
 
     uint256 public constant EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED = 7;
+    uint256 public constant INIT_NEXT_DRAW_REWARD = 0.0001 ether;
+    // draw (requestId) => lotteryNumberHashByOwner => PlaySnapshot
     mapping(uint256 => mapping(bytes32 => PlaySnapshot)) public playerSnapshots;
+    // 確認每個 address 擁有的 notDitto 是參與哪一期的 draw
     mapping(address => uint256[3]) public engagedLotteryList;
 
-    uint256 public latestDraw;
-    mapping(uint256 => uint256[4]) public draws;
+    uint256 creatingNewDraw = 1;
+
+    modifier noReentry() {
+        require(creatingNewDraw == 1, "Not Allow Reentrancy");
+        creatingNewDraw = 2;
+        _;
+        creatingNewDraw = 1;
+    }
+
+    constructor(
+        address _link,
+        address _vrf_v2_wrapper
+    ) payable LotteryAndFight(_link, _vrf_v2_wrapper) {}
 
     // === NotDitto Lottery === //
-    function withdrawLotteryPrize(uint256 draw) external {
-        if (vaultIsLock) {
+    function withdrawLotteryPrize(uint256 draw) external noReentry {
+        if (vaultIsLocked()) {
             revert VaultIsLocked();
         }
 
         uint256[3] memory _engagedLotteryList = engagedLotteryList[msg.sender];
+        uint256 tickets = _engagedLotteryList.length;
+
+        if (tickets == 0) {
+            revert();
+        }
+
         uint256 reward;
 
-        for (uint256 i = 0; i < _engagedLotteryList.length; ) {
-            uint256 lotteryIndex = _engagedLotteryList.length - 1;
+        for (uint256 i = 0; i < tickets; ) {
+            uint256 lotteryIndex = tickets - 1;
             uint256 notDittoIndex = _engagedLotteryList[lotteryIndex];
 
             bytes32 playerDrawHash = keccak256(
@@ -43,14 +64,12 @@ contract NotDittoCanFight is NotDittoAndItems {
             PlaySnapshot memory playerSnapshot = playerSnapshots[draw][
                 playerDrawHash
             ];
-
+            require(playerSnapshot.engagedLottery);
             playerSnapshots[draw][playerDrawHash].engagedLottery = false;
             delete _engagedLotteryList[lotteryIndex];
 
-            require(playerSnapshot.engagedLottery);
-
             uint256 factor = Lottery._checkLotteryPrize(
-                draws[draw],
+                requests[draw].randomWords,
                 playerSnapshot.lotteryNumber
             );
 
@@ -62,11 +81,15 @@ contract NotDittoCanFight is NotDittoAndItems {
         payable(msg.sender).transfer(reward); // TODO: 改用 WETH 來進行
     }
 
+    function vaultIsLocked() internal view returns (bool locked) {
+        locked = address(this).balance <= 0.5 ether;
+    }
+
     function engageInLottery(
         uint256 tokenId,
         uint256[4] calldata lotteryNumber
     ) external {
-        if (vaultIsLock) {
+        if (vaultIsLocked()) {
             revert VaultIsLocked();
         }
 
@@ -84,22 +107,33 @@ contract NotDittoCanFight is NotDittoAndItems {
 
         _burnNotDitto(tokenId, false);
 
-        uint256 nextDraw = latestDraw + 1; // TODO: draw 會變成記在 oracle 上的變數
         bytes32 playerDrawHash = keccak256(
             abi.encodePacked(msg.sender, tokenId)
         );
-        playerSnapshots[nextDraw][playerDrawHash] = PlaySnapshot(
+        uint256 _lastRequestId = lastRequestId;
+        uint256 draw = requests[_lastRequestId].fulfilled
+            ? _lastRequestId + 1
+            : _lastRequestId;
+
+        playerSnapshots[draw][playerDrawHash] = PlaySnapshot(
             lotteryNumber,
             _notDittoSnapshot.effort,
             true
         );
+        
         engagedLotteryList[msg.sender][
             engagedLotteryList[msg.sender].length
         ] = tokenId;
     }
 
+    function createNextDraw() public noReentry {
+        requestNewRandomNum();
+        // TODO: assign payment if one has create new draw
+        payable(msg.sender).transfer(INIT_NEXT_DRAW_REWARD);
+    }
+
     // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
-    function takeUnattendedNotDittoToOrphanage(uint256 id) public {
+    function takeUnattendedNotDittoToOrphanage(uint256 id) public noReentry {
         NotDittoInfo memory _info = notDittoInfos[id];
         require(_info.owner != address(0));
 

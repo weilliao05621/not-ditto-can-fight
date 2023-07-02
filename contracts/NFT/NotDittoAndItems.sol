@@ -36,10 +36,10 @@ contract NotDittoAndItems is
     uint256 public constant LEVEL_UP_STAR = 3;
 
     uint256 public constant MINT_PRICE = 0.001 ether;
-    uint256 public constant RASIE_SUPPORT_FEE = (0.001 ether * 250) / 10000; // 2.5%
+    uint256 public constant RASIE_SUPPORT_FEE = (MINT_PRICE * 250) / 10000; // 2.5%
 
     uint256 public constant MAX_NOT_DITTO_SUPPLY_PER_ADDRESS = 3;
-    uint256 public constant MAX_NOT_DITTO_SUPPLY = 1000;
+    uint256 public constant MAX_NOT_DITTO_SUPPLY = 10; // TODO: 先用 10 隻做測試，最多只支援 1_000
 
     // tokenId => owner => amount
     mapping(uint256 => mapping(address => uint256)) private _balances;
@@ -55,8 +55,6 @@ contract NotDittoAndItems is
     mapping(bytes32 => bool) public morphedNftHash;
     mapping(uint256 => NotDittoInfo) public notDittoInfos;
     mapping(uint256 => NotDittoSnapshot) public notDittoSnapshots;
-
-    bool public vaultIsLock = true;
 
     function supportsInterface(
         bytes4 interfaceId

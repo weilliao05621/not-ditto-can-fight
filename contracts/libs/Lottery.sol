@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 library Lottery {
     function _checkLotteryPrize(
-        uint256[4] memory drawNumber,
+        uint256[] memory drawNumber,
         uint256[4] memory lotteryNumber
     ) public pure returns (uint256 prizeFactor) {
         for (uint256 i = 0; i < lotteryNumber.length; i++) {
