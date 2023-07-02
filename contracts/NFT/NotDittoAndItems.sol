@@ -56,7 +56,7 @@ contract NotDittoAndItems is
     mapping(uint256 => NotDittoInfo) public notDittoInfos;
     mapping(uint256 => NotDittoSnapshot) public notDittoSnapshots;
 
-    bool public vaultIsLock = true;
+    
 
     function supportsInterface(
         bytes4 interfaceId
