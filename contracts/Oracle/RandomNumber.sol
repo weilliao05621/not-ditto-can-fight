@@ -22,6 +22,7 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
     uint32 public constant NUM_WORDS = 4;
     uint176 public lastRequestId = 1;
     uint256 public lastRequestTimestamp; // 用來確保每次開獎都至少間隔一定天數
+    uint256 public MIN_TIME_OF_NEXT_DRAW = 7 days; // 最少參與人數
     // requestId => RequestStatus
     mapping(uint256 => RequestStatus) public requests;
 
@@ -49,9 +50,10 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
 
     function requestNewRandomNum() internal {
         require(
-            block.timestamp - lastRequestTimestamp >= 1 days,
+            block.timestamp - lastRequestTimestamp >= MIN_TIME_OF_NEXT_DRAW,
             "ORACLE: can only create a new draw once a day"
         );
+        
         lastRequestTimestamp = block.timestamp;
 
         uint176 _lastRequestId = lastRequestId;
