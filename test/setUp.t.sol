@@ -11,29 +11,27 @@ contract SetUpTest is Test {
         0x779877A7B0D9E8603169DdbD7836e478b4624789;
     address WRAPPER_V2_ADDRESS_OF_SEPOLIA =
         0xab18414CD93297B0d12ac29E63Ca20f515b3DB46;
+    uint256 constant NOT_DITTO_ID = 0;
     FakeERC721 nft;
     NotDittoCanFight notDittoCanFight;
-    address deployer;
+
     address user1;
     address user2;
     address user3;
     address user4;
 
-    function setUp() public {
+    function setUp() public virtual {
         nft = new FakeERC721();
         notDittoCanFight = new NotDittoCanFight(
             LINK_TOKEN_ADDRESS_OF_SEPOLIA,
             WRAPPER_V2_ADDRESS_OF_SEPOLIA
         );
 
-        deployer = makeAddr("deployer");
-
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
         user3 = makeAddr("user3");
         user4 = makeAddr("user4");
 
-        vm.label(deployer, "deployer");
         vm.label(user1, "user1");
         vm.label(user2, "user2");
         vm.label(user3, "user3");
@@ -53,10 +51,18 @@ contract SetUpTest is Test {
         address[] memory tos = new address[](1);
         tos[0] = address(notDittoCanFight);
 
-        _initBalances(tokens, tos);
+        _initAllBalances(tokens, tos);
     }
 
-    function _initBalances(
+    function _initEther() public {
+        // assign 10 ETHER to users for minting
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
+        vm.deal(user3, 10 ether);
+        vm.deal(user4, 10 ether);
+    }
+
+    function _initAllBalances(
         address[] memory tokens,
         address[] memory tos
     ) internal {
@@ -64,12 +70,7 @@ contract SetUpTest is Test {
         for (uint256 i = 0; i < tokens.length; i++) {
             deal(tokens[i], tos[i], 100 ether);
         }
-
-        // assign 10 ETHER to users for minting
-        vm.deal(user1, 10 ether);
-        vm.deal(user2, 10 ether);
-        vm.deal(user3, 10 ether);
-        vm.deal(user4, 10 ether);
+        _initEther();
     }
 
     function _mintFakeERC721() internal {
@@ -82,5 +83,8 @@ contract SetUpTest is Test {
             if (9 <= i && i < 12) user = user4;
             nft.mint(user, i);
         }
+
+        // extra mint for testing upper limit
+        nft.mint(user, 12);
     }
 }
