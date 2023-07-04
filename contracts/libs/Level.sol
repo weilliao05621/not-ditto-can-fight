@@ -35,7 +35,7 @@ library Level {
         uint256 _duration
     ) internal pure returns (uint256 portion) {
         uint256 forDecimals = 10 ** EXP_DECIMALS;
-        portion = (_duration * forDecimals) / 0.125 days;
+        portion = (_duration * forDecimals) / 3 hours;
     }
 
     function _getEffortFactorByLevel(

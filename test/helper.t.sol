@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 import {SetUpTest} from "test/setUp.t.sol";
 
-contract MintHelper is SetUpTest {
+contract Helper is SetUpTest {
     uint256 public constant MINT_PRICE = 0.001 ether;
 
     function userMintNewBornSingle(
@@ -67,5 +67,21 @@ contract MintHelper is SetUpTest {
             nftAddresses[i] = address(nft);
             nftIds[i] = i + startAt;
         }
+    }
+
+    function claimOfflineRewardWithPortion(
+        uint256 times,
+        uint256 notDittoId
+    ) public {
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+
+        vm.startPrank(user1);
+        for (uint256 i = 0; i < times; i++) {
+            skip(0.125 days);
+            notDittoCanFight.claimOfflineReward{value: RASIE_SUPPORT_FEE}(
+                notDittoId
+            );
+        }
+        vm.stopPrank();
     }
 }

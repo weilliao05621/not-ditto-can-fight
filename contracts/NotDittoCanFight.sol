@@ -158,10 +158,16 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
     }
 
     // === NotDitto Level === //
-    function withdrawOfflineReward(uint256 tokenId) external {
+    function claimOfflineReward(uint256 tokenId) external payable {
         if (!checkIsNotDittoOwner(tokenId)) {
             revert ErrorFromInteractWithNotDitto(
                 uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NOT_DITTO)
+            );
+        }
+
+        if (msg.value < RASIE_SUPPORT_FEE) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.NOT_ENOUGH_RAISE_SUPPORT_FEE)
             );
         }
         // TODO: 如果是 0 等要提領，會把 allowTransfered 調成 false
