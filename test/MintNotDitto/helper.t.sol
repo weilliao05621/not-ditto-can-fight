@@ -3,7 +3,7 @@ pragma solidity 0.8.19;
 
 import {SetUpTest} from "test/setUp.t.sol";
 
-contract Helper is SetUpTest {
+contract MintHelper is SetUpTest {
     uint256 public constant MINT_PRICE = 0.001 ether;
 
     function userMintNewBornSingle(

@@ -4,9 +4,9 @@ pragma solidity 0.8.19;
 import {SetUpTest} from "test/setUp.t.sol";
 
 import {ErrorConfig} from "contracts/NFT/ErrorConfig.sol";
-import {Helper} from "test/MintNotDitto/helper.t.sol";
+import {MintHelper} from "test/MintNotDitto/helper.t.sol";
 
-contract TestMintNotDittoBatch is Helper, ErrorConfig {
+contract TestMintNotDittoBatch is MintHelper, ErrorConfig {
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();

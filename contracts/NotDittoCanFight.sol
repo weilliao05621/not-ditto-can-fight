@@ -175,9 +175,12 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             uint256 duration = block.timestamp - startAt;
 
             uint256 portion = Level._getOfflineRewardPortion(duration);
-            uint256 updatedTotalExp = _snapshot.totalExp +
-                portion *
-                Level._calcOfflineRewardPerDay(effort, level);
+            // prettier-ignore
+            uint256 expPerPortion = Level._calcOfflineRewardPerDay(effort, level);
+            uint256 rawRewardExp = portion * expPerPortion;
+            // since both portion and effort are mul by decimals, need to div by decimals
+            uint256 rewardExp = rawRewardExp / (10 ** Level.EXP_DECIMALS);
+            uint256 updatedTotalExp = _snapshot.totalExp + rewardExp;
 
             notDittoSnapshots[tokenId].offlineRewardStartAt = block.timestamp;
             notDittoSnapshots[tokenId].totalExp = updatedTotalExp;
