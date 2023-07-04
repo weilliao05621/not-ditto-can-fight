@@ -94,7 +94,9 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         }
 
         if (!checkIsNotDittoOwner(tokenId)) {
-            revert NotOwnerOfTheNotDitto();
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NOT_DITTO)
+            );
         }
 
         NotDittoSnapshot memory _notDittoSnapshot = notDittoSnapshots[tokenId];
@@ -120,7 +122,7 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             _notDittoSnapshot.effort,
             true
         );
-        
+
         engagedLotteryList[msg.sender][
             engagedLotteryList[msg.sender].length
         ] = tokenId;
@@ -158,7 +160,9 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
     // === NotDitto Level === //
     function withdrawOfflineReward(uint256 tokenId) external {
         if (!checkIsNotDittoOwner(tokenId)) {
-            revert NotOwnerOfTheNotDitto();
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NOT_DITTO)
+            );
         }
         // TODO: 如果是 0 等要提領，會把 allowTransfered 調成 false
         NotDittoSnapshot memory _snapshot = notDittoSnapshots[tokenId];

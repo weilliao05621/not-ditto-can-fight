@@ -43,8 +43,9 @@ contract NotDittoAndItems is
 
     // tokenId => owner => amount
     mapping(uint256 => mapping(address => uint256)) private _balances;
-    // tokenId => totalSuppyl
-    mapping(uint256 => uint256) private _totalSupplies;
+    // tokenId => totalSupply
+    uint256[4] public totalSupplies;
+
     // notDittoId => operator => bool
     mapping(uint256 => mapping(address => bool)) private _approvals;
     mapping(address => mapping(address => bool)) private _operatorApprovals;
@@ -117,9 +118,16 @@ contract NotDittoAndItems is
     // 不提供選擇 mint 哪一個
     // mint 只檢查條件
     function mintNotDitto(address nftAddress, uint256 nftId) external payable {
-        if (msg.value != MINT_PRICE) {
+        if (msg.value < MINT_PRICE) {
             revert ErrorFromInteractWithNotDitto(
                 uint256(ErrorNotDitto.WRONG_MINT_PRICE)
+            );
+        }
+        bool reachMaxMintAmount = balanceOf(msg.sender, NOT_DITTO) >=
+            MAX_NOT_DITTO_SUPPLY_PER_ADDRESS;
+        if (reachMaxMintAmount) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.ALL_NOT_DITTO_HAS_PARENTS)
             );
         }
 
@@ -128,11 +136,16 @@ contract NotDittoAndItems is
         bytes32 nftInfoHash = keccak256(abi.encodePacked(nftAddress, nftId));
         bool existed = morphedNftHash[nftInfoHash];
 
-        require(!existed);
+        if (existed) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.NOT_DITTO_IS_UNHAPPY_TO_MORPH_EXISTED_NFT)
+            );
+        }
+
         morphedNftHash[nftInfoHash] = true;
 
         // 用同一個 index 去 mint，只是不同 mint 方式，更新 index 不一樣
-        uint256 currentNotDittoIndex = _totalSupplies[NOT_DITTO];
+        uint256 currentNotDittoIndex = totalSupplies[NOT_DITTO];
         bool allNotDittoIsMinted = currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY;
 
         // 如果 currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY，則要去看放養場有沒有等待被領養的百變怪
@@ -151,7 +164,7 @@ contract NotDittoAndItems is
             currentOrphanNotDittos.pop();
         } else {
             currentNotDittoIndex = currentNotDittoIndex + 1;
-            _totalSupplies[NOT_DITTO] = currentNotDittoIndex;
+            totalSupplies[NOT_DITTO] = currentNotDittoIndex;
         }
 
         address from = address(0);
@@ -177,19 +190,27 @@ contract NotDittoAndItems is
         _safeTransferFrom(from, to, NOT_DITTO, 1);
     }
 
-    function mintBatchNotDitto(
+    function mintNotDittoBatch(
         uint256 amount,
         address[] memory nftAddresses,
         uint256[] memory nftIds
     ) external payable {
-        if (msg.value != MINT_PRICE * amount) {
+        if (msg.value < MINT_PRICE * amount) {
             revert ErrorFromInteractWithNotDitto(
                 uint256(ErrorNotDitto.WRONG_MINT_PRICE)
             );
         }
 
+        bool reachMaxMintAmount = balanceOf(msg.sender, NOT_DITTO) >=
+            MAX_NOT_DITTO_SUPPLY_PER_ADDRESS;
+        if (reachMaxMintAmount) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.EXCEED_MAX_NOT_DITTO_SUPPLY_PER_ADDRESS)
+            );
+        }
+
         // Record Index
-        uint256 currentNotDittoIndex = _totalSupplies[NOT_DITTO];
+        uint256 currentNotDittoIndex = totalSupplies[NOT_DITTO];
         // For validation
         bool allNotDittoIsMinted = currentNotDittoIndex == MAX_NOT_DITTO_SUPPLY;
         uint256 orphans = currentOrphanNotDittos.length;
@@ -226,7 +247,14 @@ contract NotDittoAndItems is
                     );
                     bool existed = morphedNftHash[nftInfoHash];
 
-                    require(!existed);
+                    if (existed) {
+                        revert ErrorFromInteractWithNotDitto(
+                            uint256(
+                                ErrorNotDitto
+                                    .NOT_DITTO_IS_UNHAPPY_TO_MORPH_EXISTED_NFT
+                            )
+                        );
+                    }
 
                     unchecked {
                         morphedNftHash[nftInfoHash] = true;
@@ -249,7 +277,9 @@ contract NotDittoAndItems is
                 }
             }
         } else {
-            if (orphans < amount) {
+            if (
+                (MAX_NOT_DITTO_SUPPLY - currentNotDittoIndex) + orphans < amount
+            ) {
                 revert ErrorFromInteractWithNotDitto(
                     uint256(ErrorNotDitto.ALL_NOT_DITTO_HAS_PARENTS)
                 );
@@ -282,7 +312,14 @@ contract NotDittoAndItems is
                     );
                     bool existed = morphedNftHash[nftInfoHash];
 
-                    require(!existed);
+                    if (existed) {
+                        revert ErrorFromInteractWithNotDitto(
+                            uint256(
+                                ErrorNotDitto
+                                    .NOT_DITTO_IS_UNHAPPY_TO_MORPH_EXISTED_NFT
+                            )
+                        );
+                    }
 
                     unchecked {
                         morphedNftHash[nftInfoHash] = true;
@@ -323,12 +360,25 @@ contract NotDittoAndItems is
                     }
                 }
 
-                _totalSupplies[NOT_DITTO] =
-                    _totalSupplies[NOT_DITTO] +
+                totalSupplies[NOT_DITTO] =
+                    totalSupplies[NOT_DITTO] +
                     newBornNotDitto;
             }
         }
         _safeTransferFrom(address(0), msg.sender, NOT_DITTO, amount);
+    }
+
+    function multicallTotalSupplies(
+        uint256[] memory tokenIds
+    ) external view returns (uint256[] memory amounts) {
+        require(tokenIds.length <= 4);
+        uint256[4] memory _totalSupplies = totalSupplies;
+        for (uint256 i = 0; i < tokenIds.length; ) {
+            amounts[i] = _totalSupplies[tokenIds[i]];
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function balanceOf(
@@ -523,11 +573,17 @@ contract NotDittoAndItems is
         uint256 nftTokenId
     ) external {
         if (!checkIsNotDittoOwner(tokenId)) {
-            revert NotOwnerOfTheNotDitto();
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NOT_DITTO)
+            );
         }
 
         if (nftAddr == address(0)) {
-            revert NotDittoIsUnhappyToMorphZeroAddress();
+            revert ErrorFromInteractWithNotDitto(
+                uint256(
+                    ErrorNotDitto.NOT_DITTO_IS_UNHAPPY_TO_MORPH_ZERO_ADDRESS
+                )
+            );
         }
 
         if (nftTokenId == 0) {
@@ -556,7 +612,7 @@ contract NotDittoAndItems is
         address player,
         address nftAddr,
         uint256 tokenId
-    ) internal view returns (bool isOwner) {
+    ) internal view {
         uint256 errorCode;
 
         if (nftAddr == address(0)) {
@@ -578,8 +634,12 @@ contract NotDittoAndItems is
             tokenId
         );
         (bool success, bytes memory rawOwner) = nftAddr.staticcall(payload);
-        require(success, "NotDitto: failed to call ERC721's ownerOf()");
-        isOwner = abi.decode(rawOwner, (address)) == player;
+        require(success);
+        bool notOwner = abi.decode(rawOwner, (address)) != player;
+        if (notOwner) {
+            errorCode = uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NFT);
+            revert ErrorFromInteractWithNotDitto(errorCode);
+        }
     }
 
     // 0 - 15 對應 16 種屬性，沒有普通和幽靈
