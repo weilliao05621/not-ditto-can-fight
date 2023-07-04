@@ -3,8 +3,8 @@ pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
 
-import "../contracts/test/FakeNFT.sol";
-import "../contracts/NotDittoCanFight.sol";
+import "contracts/test/FakeNFT.sol";
+import "contracts/NotDittoCanFight.sol";
 
 contract SetUpTest is Test {
     address LINK_TOKEN_ADDRESS_OF_SEPOLIA =
