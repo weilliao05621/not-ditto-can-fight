@@ -6,7 +6,7 @@ import {SetUpTest} from "test/setUp.t.sol";
 import {ErrorConfig} from "contracts/NFT/ErrorConfig.sol";
 import {Helper} from "test/MintNotDitto/helper.t.sol";
 
-contract TestMintNotDitto is Helper, ErrorConfig {
+contract TestMintNotDittoBatch is Helper, ErrorConfig {
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();

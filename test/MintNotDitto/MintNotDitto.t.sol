@@ -80,7 +80,7 @@ contract TestMintNotDitto is Helper, ErrorConfig {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ErrorFromInteractWithNotDitto.selector,
-                uint256(ErrorNotDitto.EXCEED_MAX_NOT_DITTO_SUPPLY_PER_ADDRESS)
+                uint256(ErrorNotDitto.ALL_NOT_DITTO_HAS_PARENTS)
             )
         );
         userMintNewBornSingle(user1, MINT_PRICE, 12);
