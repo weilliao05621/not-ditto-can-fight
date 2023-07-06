@@ -5,7 +5,6 @@ import "forge-std/Test.sol";
 
 import "chainlink/contracts/src/v0.8/mocks/VRFCoordinatorV2Mock.sol"; // coordinator
 import "chainlink/contracts/src/v0.8/tests/MockV3Aggregator.sol"; // link/eth
-import "chainlink/contracts/src/v0.4/LinkToken.sol";
 import "chainlink/contracts/src/v0.8/vrf/VRFV2Wrapper.sol";
 
 import "contracts/test/FakeNFT.sol";
@@ -16,24 +15,21 @@ contract MockOracle {
     uint96 _BASEFEE = 0.1 ether;
     uint96 _GASPRICELINK = 1 gwei;
     MockV3Aggregator mockV3Aggregator;
-    uint8 _DECIMALS = 18;
-    uint _INITIALANSWER = 0.003 ether;
-    LinkToken link;
     VRFV2Wrapper vrfV2Wrapper;
+    uint16 public constant REQUEST_CONFIRMATIONS = 10;
 
-    function _setOracleMock() public {
+    function _setOracleMock(address _link) public {
         // create coordinator first
         vrfCoordinatorV2Mock = new VRFCoordinatorV2Mock(
             _BASEFEE,
             _GASPRICELINK
         );
         // get link/eth price: 1 LINK = 0.003 native tokens
-        mockV3Aggregator = new MockV3Aggregator(_DECIMALS, _INITIALANSWER);
-        // a simple mock LINK
-        link = new LinkToken();
+        mockV3Aggregator = new MockV3Aggregator(18, 0.003 ether);
+
         // creates a new subscription and adds itself to the newly created subscription
         vrfV2Wrapper = new VRFV2Wrapper(
-            address(link),
+            _link,
             address(mockV3Aggregator),
             address(vrfCoordinatorV2Mock)
         );
@@ -53,11 +49,14 @@ contract MockOracle {
 contract SetUpTest is Test, MockOracle {
     address LINK_TOKEN_ADDRESS_OF_SEPOLIA =
         0x779877A7B0D9E8603169DdbD7836e478b4624789;
-    address WRAPPER_V2_ADDRESS_OF_SEPOLIA =
-        0xab18414CD93297B0d12ac29E63Ca20f515b3DB46;
+    // address WRAPPER_V2_ADDRESS_OF_SEPOLIA =
+    //     0xab18414CD93297B0d12ac29E63Ca20f515b3DB46;
     uint256 constant NOT_DITTO_ID = 0;
     FakeERC721 nft;
     NotDittoCanFight notDittoCanFight;
+
+    uint256 constant INIT_ERC20_BALANCE = 100 ether;
+    uint256 constant INIT_ETHER = 10 ether;
 
     address user1;
     address user2;
@@ -65,18 +64,15 @@ contract SetUpTest is Test, MockOracle {
     address user4;
 
     function setUp() public virtual {
-        nft = new FakeERC721();
+        string memory SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
+        uint256 forkId = vm.createFork(SEPOLIA_RPC_URL);
+        vm.selectFork(forkId);
 
+        _setOracleMock(LINK_TOKEN_ADDRESS_OF_SEPOLIA);
         notDittoCanFight = new NotDittoCanFight(
-            address(link),
+            address(LINK_TOKEN_ADDRESS_OF_SEPOLIA),
             address(vrfV2Wrapper)
         );
-
-        address[] memory tokens = new address[](1);
-        address[] memory tos = new address[](1);
-        tokens[0] = address(link);
-        tos[0] = address(notDittoCanFight);
-        _initAllBalances(tokens, tos);
 
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
@@ -88,19 +84,6 @@ contract SetUpTest is Test, MockOracle {
         vm.label(user3, "user3");
         vm.label(user4, "user4");
 
-        _mintFakeERC721();
-    }
-
-    function forkFromSepolia() public {
-        string memory SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
-        uint256 forkId = vm.createFork(SEPOLIA_RPC_URL);
-        vm.selectFork(forkId);
-
-        notDittoCanFight = new NotDittoCanFight(
-            LINK_TOKEN_ADDRESS_OF_SEPOLIA,
-            WRAPPER_V2_ADDRESS_OF_SEPOLIA
-        );
-
         address[] memory tokens = new address[](1);
         tokens[0] = LINK_TOKEN_ADDRESS_OF_SEPOLIA;
 
@@ -108,14 +91,18 @@ contract SetUpTest is Test, MockOracle {
         tos[0] = address(notDittoCanFight);
 
         _initAllBalances(tokens, tos);
+
+        nft = new FakeERC721();
+        _mintFakeERC721();
     }
 
     function _initEther() public {
         // assign 10 ETHER to users for minting
-        vm.deal(user1, 10 ether);
-        vm.deal(user2, 10 ether);
-        vm.deal(user3, 10 ether);
-        vm.deal(user4, 10 ether);
+        vm.deal(user1, INIT_ETHER);
+        vm.deal(user2, INIT_ETHER);
+        vm.deal(user3, INIT_ETHER);
+        vm.deal(user4, INIT_ETHER);
+        vm.deal(address(notDittoCanFight), INIT_ETHER);
     }
 
     function _initAllBalances(
@@ -124,7 +111,7 @@ contract SetUpTest is Test, MockOracle {
     ) internal {
         // assign 100 LINK to contract
         for (uint256 i = 0; i < tokens.length; i++) {
-            deal(tokens[i], tos[i], 100 ether);
+            deal(tokens[i], tos[i], INIT_ERC20_BALANCE);
         }
         _initEther();
     }

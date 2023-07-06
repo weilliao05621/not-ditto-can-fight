@@ -23,7 +23,6 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
     uint32 public constant NUM_WORDS = 4;
 
     uint256 public drawIndex = 1;
-    uint256 public lastRequestId;
     uint256 public lastRequestTimestamp; // 用來確保每次開獎都至少間隔一定天數
     uint256 public MIN_TIME_OF_NEXT_DRAW = 7 days; // 最少參與人數
     // requestId => RequestStatus
@@ -47,17 +46,28 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
         );
         require(randomWords.length == NUM_WORDS, "wrong number of randomWords");
 
-        lastRequestId = requestId;
-
         uint256 _drawIndex = drawIndex;
         uint256 newDrawIndex = _drawIndex + 1;
         drawIndex = newDrawIndex;
 
-        requests[requestId].fulfilled = true;
-        requests[requestId].randomWords = randomWords;
+        uint256[] memory _randomWords = requests[requestId].randomWords;
 
-        emit RequestFulfilled(requestId, randomWords);
+        // should be 0 - 9
+        for (uint256 i = 0; i < randomWords.length; i++) {
+            _randomWords[i] = (randomWords[i] % 9);
+        }
+
+        requests[requestId].fulfilled = true;
+        requests[requestId].randomWords = _randomWords;
+
+        emit RequestFulfilled(requestId, _randomWords);
         emit NewDraw(drawIndex, requestId);
+    }
+
+    function getRadomWordsByRequestId(
+        uint256 requestId
+    ) public view returns (uint256[] memory) {
+        return requests[requestId].randomWords;
     }
 
     function requestNewRandomNum() internal {
@@ -68,10 +78,6 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
 
         lastRequestTimestamp = block.timestamp;
 
-        uint256 _lastRequestId = lastRequestId;
-        _lastRequestId = _lastRequestId + 1;
-        lastRequestId = _lastRequestId;
-
         uint256 newRequestId = requestRandomness(
             CALLBACK_GAS_LIMITATION,
             REQUEST_CONFIRMATIONS,
@@ -81,11 +87,15 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
         requests[newRequestId] = RequestStatus({
             fulfilled: false,
             exists: true,
-            randomWords: new uint256[](0)
+            randomWords: new uint256[](NUM_WORDS)
         });
 
         requestIdByDrawIndex[drawIndex] = newRequestId;
 
         emit RequestSent(newRequestId, NUM_WORDS);
+    }
+
+    function lastRequestId() public view returns (uint256) {
+        return VRF_V2_WRAPPER.lastRequestId();
     }
 }
