@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 import "forge-std/Test.sol";
 
 import {ErrorConfig} from "contracts/NFT/ErrorConfig.sol";
-import {Helper} from "test/MintNotDitto/helper.t.sol";
+import {Helper} from "test/helper.t.sol";
 
 contract TestMintNotDitto is Helper, ErrorConfig {
     function setUp() public override {
@@ -47,8 +47,6 @@ contract TestMintNotDitto is Helper, ErrorConfig {
         assertEq(owner, user1, "MINT: MINTED_OWNERSHIP");
         assertEq(nftAddr, address(nft), "MINT: MINTED_NFT_ADDRESS");
     }
-
-    
 
     function test_validToPayOverMintFee() public {
         uint256 higherPrice = MINT_PRICE + MINT_PRICE / 10;
