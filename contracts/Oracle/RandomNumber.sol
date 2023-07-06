@@ -10,6 +10,7 @@ import "chainlink/contracts/src/v0.8/vrf/VRFV2WrapperConsumerBase.sol";
 contract LotteryAndFight is VRFV2WrapperConsumerBase {
     event RequestSent(uint256 requestId, uint32 numWords);
     event RequestFulfilled(uint256 requestId, uint256[] randomWords);
+    event NewDraw(uint256 indexed drawIndex, uint256 requestId);
 
     struct RequestStatus {
         bool fulfilled;
@@ -21,20 +22,21 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
     uint16 public constant REQUEST_CONFIRMATIONS = 10;
     uint32 public constant NUM_WORDS = 4;
 
-    // TODO: 如果是要使用鏈上的 wrapper & coordinator，要自己繼續發過幾次 request 才是 index
-    // 舉例來說 Sepolia 上的目前已經到了 109633308322872451740277313816242394424923305601307255569641281954357508737320 
-    uint176 public lastRequestId = 1; 
+    uint256 public drawIndex = 1;
+    uint256 public lastRequestId;
     uint256 public lastRequestTimestamp; // 用來確保每次開獎都至少間隔一定天數
     uint256 public MIN_TIME_OF_NEXT_DRAW = 7 days; // 最少參與人數
     // requestId => RequestStatus
     mapping(uint256 => RequestStatus) public requests;
+    // drawIndex => requestId
+    mapping(uint256 => uint256) public requestIdByDrawIndex;
 
     constructor(
         address _link,
         address _vrf_v2_wrapper
     ) VRFV2WrapperConsumerBase(_link, _vrf_v2_wrapper) {}
 
-    // handles the VRF response
+    // handles the VRF_WRAPPER response
     function fulfillRandomWords(
         uint256 requestId,
         uint256[] memory randomWords
@@ -43,12 +45,19 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
             requests[requestId].exists,
             "requestId does not exist or has already been fulfilled"
         );
-
         require(randomWords.length == NUM_WORDS, "wrong number of randomWords");
+
+        lastRequestId = requestId;
+
+        uint256 _drawIndex = drawIndex;
+        uint256 newDrawIndex = _drawIndex + 1;
+        drawIndex = newDrawIndex;
+
         requests[requestId].fulfilled = true;
         requests[requestId].randomWords = randomWords;
 
         emit RequestFulfilled(requestId, randomWords);
+        emit NewDraw(drawIndex, requestId);
     }
 
     function requestNewRandomNum() internal {
@@ -56,24 +65,27 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
             block.timestamp - lastRequestTimestamp >= MIN_TIME_OF_NEXT_DRAW,
             "ORACLE: can only create a new draw once a day"
         );
-        
+
         lastRequestTimestamp = block.timestamp;
 
-        uint176 _lastRequestId = lastRequestId;
-        requests[_lastRequestId] = RequestStatus({
-            fulfilled: false,
-            exists: true,
-            randomWords: new uint256[](0)
-        });
+        uint256 _lastRequestId = lastRequestId;
         _lastRequestId = _lastRequestId + 1;
         lastRequestId = _lastRequestId;
 
-        requestRandomness(
+        uint256 newRequestId = requestRandomness(
             CALLBACK_GAS_LIMITATION,
             REQUEST_CONFIRMATIONS,
             NUM_WORDS
         );
 
-        emit RequestSent(_lastRequestId, NUM_WORDS);
+        requests[newRequestId] = RequestStatus({
+            fulfilled: false,
+            exists: true,
+            randomWords: new uint256[](0)
+        });
+
+        requestIdByDrawIndex[drawIndex] = newRequestId;
+
+        emit RequestSent(newRequestId, NUM_WORDS);
     }
 }

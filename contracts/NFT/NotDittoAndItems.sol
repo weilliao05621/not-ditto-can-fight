@@ -117,6 +117,7 @@ contract NotDittoAndItems is
 
     // 不提供選擇 mint 哪一個
     // mint 只檢查條件
+    // TODO: 為了確保 NotDitto 變成 Orphan 後不會馬上被同一個 owner 領養，要變成 internal，然後到game去實作
     function mintNotDitto(address nftAddress, uint256 nftId) external payable {
         if (msg.value < MINT_PRICE) {
             revert ErrorFromInteractWithNotDitto(
@@ -190,6 +191,7 @@ contract NotDittoAndItems is
         _safeTransferFrom(from, to, NOT_DITTO, 1);
     }
 
+    // TODO: 為了確保 NotDitto 變成 Orphan 後不會馬上被同一個 owner 領養，要變成 internal，然後到game去實作
     function mintNotDittoBatch(
         uint256 amount,
         address[] memory nftAddresses,
