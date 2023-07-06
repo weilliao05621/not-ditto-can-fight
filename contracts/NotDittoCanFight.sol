@@ -19,19 +19,10 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
 
     uint256 public constant EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED = 7;
     uint256 public constant INIT_NEXT_DRAW_REWARD = 0.0001 ether;
-    // draw (requestId) => lotteryNumberHashByOwner => PlaySnapshot
+    // draw (drawIndex) => lotteryNumberHashByOwner => PlaySnapshot
     mapping(uint256 => mapping(bytes32 => PlaySnapshot)) public playerSnapshots;
     // 確認每個 address 擁有的 notDitto 是參與哪一期的 draw
     mapping(address => uint256[3]) public engagedLotteryList;
-
-    uint256 creatingNewDraw = 1;
-
-    modifier noReentry() {
-        require(creatingNewDraw == 1, "Not Allow Reentrancy");
-        creatingNewDraw = 2;
-        _;
-        creatingNewDraw = 1;
-    }
 
     constructor(
         address _link,
@@ -39,7 +30,7 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
     ) payable LotteryAndFight(_link, _vrf_v2_wrapper) {}
 
     // === NotDitto Lottery === //
-    function withdrawLotteryPrize(uint256 draw) external noReentry {
+    function withdrawLotteryPrize(uint256 draw) external {
         if (vaultIsLocked()) {
             revert VaultIsLocked();
         }
@@ -53,10 +44,12 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
 
         uint256 reward;
 
+        // 每次領獎都是全部 ticket 一次領完
         for (uint256 i = 0; i < tickets; ) {
             uint256 lotteryIndex = tickets - 1;
             uint256 notDittoIndex = _engagedLotteryList[lotteryIndex];
 
+            // 利用 owner + notDittoIndex 來算出特別的 lotteryNumberHash
             bytes32 playerDrawHash = keccak256(
                 abi.encodePacked(msg.sender, notDittoIndex)
             );
@@ -68,11 +61,11 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             playerSnapshots[draw][playerDrawHash].engagedLottery = false;
             delete _engagedLotteryList[lotteryIndex];
 
+            uint256 _requestIdByDrawIndex = requestIdByDrawIndex[draw];
             uint256 factor = Lottery._checkLotteryPrize(
-                requests[draw].randomWords,
+                requests[_requestIdByDrawIndex].randomWords,
                 playerSnapshot.lotteryNumber
             );
-
             uint256 effortRefund = playerSnapshot.effort * RASIE_SUPPORT_FEE;
             reward += Lottery._calcPrizeWithFactor(effortRefund, factor);
         }
@@ -112,12 +105,9 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         bytes32 playerDrawHash = keccak256(
             abi.encodePacked(msg.sender, tokenId)
         );
-        uint256 _lastRequestId = lastRequestId;
-        uint256 draw = requests[_lastRequestId].fulfilled
-            ? _lastRequestId + 1
-            : _lastRequestId;
-
-        playerSnapshots[draw][playerDrawHash] = PlaySnapshot(
+        
+        // 直接參加還未開獎的那一期
+        playerSnapshots[drawIndex][playerDrawHash] = PlaySnapshot(
             lotteryNumber,
             _notDittoSnapshot.effort,
             true
@@ -128,14 +118,15 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         ] = tokenId;
     }
 
-    function createNextDraw() public noReentry {
+    function createNextDraw() public {
         requestNewRandomNum();
         // TODO: assign payment if one has create new draw
         payable(msg.sender).transfer(INIT_NEXT_DRAW_REWARD);
     }
 
     // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
-    function takeUnattendedNotDittoToOrphanage(uint256 id) public noReentry {
+    // 如果已經有參加抽獎，則 NotDitto 也已經變成 orphan
+    function takeUnattendedNotDittoToOrphanage(uint256 id) public {
         NotDittoInfo memory _info = notDittoInfos[id];
         require(_info.owner != address(0));
 
