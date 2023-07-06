@@ -14,8 +14,6 @@ import {NotDittoConfig} from "contracts/NFT/NotDittoConfig.sol";
 // record: 26天 都每三小時領一次，會到滿等 > 31161600
 
 contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
-    uint256 public constant RASIE_SUPPORT_FEE = (MINT_PRICE * 250) / 10000;
-
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();

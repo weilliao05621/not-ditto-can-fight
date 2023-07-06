@@ -5,6 +5,7 @@ import {SetUpTest} from "test/setUp.t.sol";
 
 contract Helper is SetUpTest {
     uint256 public constant MINT_PRICE = 0.001 ether;
+    uint256 public constant RASIE_SUPPORT_FEE = (MINT_PRICE * 25) / 1000;
 
     function userMintNewBornSingle(
         address user,
@@ -83,5 +84,17 @@ contract Helper is SetUpTest {
             );
         }
         vm.stopPrank();
+    }
+
+    function updateDraw(uint256 draw) public {
+        vm.prank(user1);
+        notDittoCanFight.createNextDraw();
+
+        uint256 requestId = notDittoCanFight.requestIdByDrawIndex(draw);
+
+        vrfCoordinatorV2Mock.fulfillRandomWords(
+            requestId,
+            address(vrfV2Wrapper)
+        );
     }
 }
