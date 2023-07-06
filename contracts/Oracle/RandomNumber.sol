@@ -20,7 +20,10 @@ contract LotteryAndFight is VRFV2WrapperConsumerBase {
     uint32 public constant CALLBACK_GAS_LIMITATION = 1_000_000;
     uint16 public constant REQUEST_CONFIRMATIONS = 10;
     uint32 public constant NUM_WORDS = 4;
-    uint176 public lastRequestId = 1;
+
+    // TODO: 如果是要使用鏈上的 wrapper & coordinator，要自己繼續發過幾次 request 才是 index
+    // 舉例來說 Sepolia 上的目前已經到了 109633308322872451740277313816242394424923305601307255569641281954357508737320 
+    uint176 public lastRequestId = 1; 
     uint256 public lastRequestTimestamp; // 用來確保每次開獎都至少間隔一定天數
     uint256 public MIN_TIME_OF_NEXT_DRAW = 7 days; // 最少參與人數
     // requestId => RequestStatus
