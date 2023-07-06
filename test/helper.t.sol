@@ -72,11 +72,10 @@ contract Helper is SetUpTest {
 
     function claimOfflineRewardWithPortion(
         uint256 times,
-        uint256 notDittoId
+        uint256 notDittoId,
+        address user
     ) public {
-        userMintNewBornSingle(user1, MINT_PRICE, 0);
-
-        vm.startPrank(user1);
+        vm.startPrank(user);
         for (uint256 i = 0; i < times; i++) {
             skip(0.125 days);
             notDittoCanFight.claimOfflineReward{value: RASIE_SUPPORT_FEE}(

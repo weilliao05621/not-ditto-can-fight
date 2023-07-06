@@ -17,7 +17,7 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();
-        _initEther();
+        localTesting();
     }
 
     function test_claimOfflineReward() public {
@@ -55,7 +55,8 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function test_claimOfflineRewardPerPortionForOneDay() public {
         uint256 notDittoId = 1;
         uint256 times = 1 days / 3 hours;
-        claimOfflineRewardWithPortion(8, notDittoId);
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+        claimOfflineRewardWithPortion(8, notDittoId,user1);
 
         (, uint256 totalExp, uint256 effort) = notDittoCanFight
             .notDittoSnapshots(notDittoId);
@@ -67,7 +68,8 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function test_claimOfflineRewardPerPortionForTwoWeek() public {
         uint256 notDittoId = 1;
         uint256 times = 2 weeks / 3 hours;
-        claimOfflineRewardWithPortion(112, notDittoId);
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+        claimOfflineRewardWithPortion(112, notDittoId,user1);
 
         (, uint256 totalExp, uint256 effort) = notDittoCanFight
             .notDittoSnapshots(notDittoId);
@@ -79,7 +81,8 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function test_claimOfflineRewardPerPortionTillMaxLevel() public {
         uint256 notDittoId = 1;
         uint256 times = 26 days / 3 hours;
-        claimOfflineRewardWithPortion(times, notDittoId);
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+        claimOfflineRewardWithPortion(times, notDittoId,user1);
 
         (, uint256 totalExp, uint256 effort) = notDittoCanFight
             .notDittoSnapshots(notDittoId);

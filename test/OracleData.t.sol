@@ -12,6 +12,11 @@ contract TestOracleData is Helper {
     uint256 public constant INIT_NEXT_DRAW_REWARD = 0.0001 ether;
     IERC20 LINK = IERC20(LINK_TOKEN_ADDRESS_OF_SEPOLIA);
 
+    function setUp() public override {
+        super.setUp();
+        forkFromSepolia();
+    }
+
     function test_getRandomWords() public {
         uint256 draw = 1;
         assertEq(notDittoCanFight.drawIndex(), draw);

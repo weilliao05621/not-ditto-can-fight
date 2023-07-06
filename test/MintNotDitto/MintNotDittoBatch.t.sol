@@ -10,7 +10,7 @@ contract TestMintNotDittoBatch is Helper, ErrorConfig {
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();
-        _initEther();
+        localTesting();
     }
 
     // record: notDitto's id starts from 1
