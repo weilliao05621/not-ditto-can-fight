@@ -73,9 +73,6 @@ contract SetUpTest is Test, MockOracle {
         vm.label(user2, "user2");
         vm.label(user3, "user3");
         vm.label(user4, "user4");
-
-        nft = new FakeERC721();
-        _mintFakeERC721();
     }
 
     function forkFromSepolia() public {
@@ -96,14 +93,17 @@ contract SetUpTest is Test, MockOracle {
         tos[0] = address(notDittoCanFight);
 
         _initAllBalances(tokens, tos);
+
+        nft = new FakeERC721();
+        _mintFakeERC721();
     }
 
     function localTesting() public {
-        notDittoCanFight = new NotDittoCanFight(
-            address(0),
-            address(0)
-        );
+        notDittoCanFight = new NotDittoCanFight(address(0), address(0));
         _initEther();
+
+        nft = new FakeERC721();
+        _mintFakeERC721();
     }
 
     function _initEther() public {
