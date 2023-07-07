@@ -8,7 +8,6 @@ import "./libs/Level.sol";
 import "./libs/Lottery.sol";
 
 error VaultIsLocked();
-error CanAccessToDrawWhenNotDittoFullyGrowTo30(uint256 level);
 
 contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
     struct PlaySnapshot {
@@ -54,23 +53,25 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
                 abi.encodePacked(msg.sender, notDittoIndex)
             );
 
-            PlaySnapshot memory playerSnapshot = playerSnapshots[draw][
+            PlaySnapshot memory _playerSnapshot = playerSnapshots[draw][
                 playerDrawHash
             ];
-            require(playerSnapshot.engagedLottery);
-            playerSnapshots[draw][playerDrawHash].engagedLottery = false;
-            delete _engagedLotteryList[lotteryIndex];
+
+            require(_playerSnapshot.engagedLottery);
+
+            delete playerSnapshots[draw][playerDrawHash];
 
             uint256 _requestIdByDrawIndex = requestIdByDrawIndex[draw];
             uint256 factor = Lottery._checkLotteryPrize(
                 requests[_requestIdByDrawIndex].randomWords,
-                playerSnapshot.lotteryNumber
+                _playerSnapshot.lotteryNumber
             );
-            uint256 effortRefund = playerSnapshot.effort * RASIE_SUPPORT_FEE;
+
+            uint256 effortRefund = _playerSnapshot.effort * RASIE_SUPPORT_FEE;
             reward += Lottery._calcPrizeWithFactor(effortRefund, factor);
         }
 
-        engagedLotteryList[msg.sender] = _engagedLotteryList;
+        delete engagedLotteryList[msg.sender];
         payable(msg.sender).transfer(reward); // TODO: 改用 WETH 來進行
     }
 
@@ -80,7 +81,7 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
 
     function engageInLottery(
         uint256 tokenId,
-        uint256[4] calldata lotteryNumber
+        uint256[4] memory lotteryNumber
     ) external {
         if (vaultIsLocked()) {
             revert VaultIsLocked();
@@ -96,16 +97,26 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         uint256 totalExp = _notDittoSnapshot.totalExp;
         uint256 currentLevel = Level._getCurrentLevel(totalExp);
 
-        if (currentLevel != 30) {
-            revert CanAccessToDrawWhenNotDittoFullyGrowTo30(currentLevel);
+        if (currentLevel < 30) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(
+                    ErrorNotDitto.SHOULD_ACCESS_TO_DRAW_WITH_MAX_LV_NOT_DITTO
+                )
+            );
         }
 
         _burnNotDitto(tokenId, false);
-
+        // 因為有可能 adopt 同一個 tokenId 的 NotDitto，所以只用 owner + tokenId
         bytes32 playerDrawHash = keccak256(
             abi.encodePacked(msg.sender, tokenId)
         );
-        
+
+        if (playerSnapshots[drawIndex][playerDrawHash].engagedLottery) {
+            revert ErrorFromInteractWithNotDitto(
+                uint256(ErrorNotDitto.ALREADY_ENGAGED_IN_THIS_DRAW)
+            );
+        }
+
         // 直接參加還未開獎的那一期
         playerSnapshots[drawIndex][playerDrawHash] = PlaySnapshot(
             lotteryNumber,
@@ -113,9 +124,18 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             true
         );
 
-        engagedLotteryList[msg.sender][
-            engagedLotteryList[msg.sender].length
-        ] = tokenId;
+        uint256[3] memory _engagedLotteryList = engagedLotteryList[msg.sender];
+        // ensure to start at 0 without conquering index out of bounds
+        // since fixed array will be initialized with all storage filled. e.g. uint256[3] will have [0,0,0] which has length of 3
+        uint256 engagedTickets = _engagedLotteryList.length;
+        uint256 ticketIndex;
+        for (uint256 i = 0; i < engagedTickets; i++) {
+            if (_engagedLotteryList[i] == 0) {
+                ticketIndex = i;
+                break;
+            }
+        }
+        engagedLotteryList[msg.sender][ticketIndex] = tokenId;
     }
 
     function createNextDraw() public {
@@ -183,5 +203,20 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             notDittoSnapshots[tokenId].totalExp = updatedTotalExp;
             notDittoSnapshots[tokenId].effort = effort + 1;
         }
+    }
+
+    function getLotteryNumberByEngagedNumber(
+        uint256 draw,
+        address owner,
+        uint256 tokenId
+    ) public view returns (uint256[4] memory) {
+        bytes32 playerHash = keccak256(abi.encodePacked(owner, tokenId));
+        return playerSnapshots[draw][playerHash].lotteryNumber;
+    }
+
+    function getEngagedLotteryList(
+        address owner
+    ) public view returns (uint256[3] memory) {
+        return engagedLotteryList[owner];
     }
 }

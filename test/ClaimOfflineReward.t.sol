@@ -11,13 +11,13 @@ import {NotDittoConfig} from "contracts/NFT/NotDittoConfig.sol";
 // record: 28天(4 weeks)都每三小時領一次，會超過太多 > 41673600
 // record: 21天(3 weeks)都每三小時領一次，會到27等 > 22257600
 // record: 24.5天(3.5 weeks)都每三小時領一次，會到27等 > 27331200
-// record: 26天 都每三小時領一次，會到滿等 > 31161600
+// record: 26天 都每三小時領一次(205次)，會到滿等 > 31161600
 
 contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();
-        _initEther();
+        localTesting();
     }
 
     function test_claimOfflineReward() public {
@@ -55,7 +55,8 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function test_claimOfflineRewardPerPortionForOneDay() public {
         uint256 notDittoId = 1;
         uint256 times = 1 days / 3 hours;
-        claimOfflineRewardWithPortion(8, notDittoId);
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+        claimOfflineRewardWithPortion(8, notDittoId,user1);
 
         (, uint256 totalExp, uint256 effort) = notDittoCanFight
             .notDittoSnapshots(notDittoId);
@@ -67,7 +68,8 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function test_claimOfflineRewardPerPortionForTwoWeek() public {
         uint256 notDittoId = 1;
         uint256 times = 2 weeks / 3 hours;
-        claimOfflineRewardWithPortion(112, notDittoId);
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+        claimOfflineRewardWithPortion(112, notDittoId,user1);
 
         (, uint256 totalExp, uint256 effort) = notDittoCanFight
             .notDittoSnapshots(notDittoId);
@@ -79,7 +81,8 @@ contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function test_claimOfflineRewardPerPortionTillMaxLevel() public {
         uint256 notDittoId = 1;
         uint256 times = 26 days / 3 hours;
-        claimOfflineRewardWithPortion(times, notDittoId);
+        userMintNewBornSingle(user1, MINT_PRICE, 0);
+        claimOfflineRewardWithPortion(times, notDittoId,user1);
 
         (, uint256 totalExp, uint256 effort) = notDittoCanFight
             .notDittoSnapshots(notDittoId);

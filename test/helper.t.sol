@@ -72,11 +72,10 @@ contract Helper is SetUpTest {
 
     function claimOfflineRewardWithPortion(
         uint256 times,
-        uint256 notDittoId
+        uint256 notDittoId,
+        address user
     ) public {
-        userMintNewBornSingle(user1, MINT_PRICE, 0);
-
-        vm.startPrank(user1);
+        vm.startPrank(user);
         for (uint256 i = 0; i < times; i++) {
             skip(0.125 days);
             notDittoCanFight.claimOfflineReward{value: RASIE_SUPPORT_FEE}(
@@ -96,5 +95,19 @@ contract Helper is SetUpTest {
             requestId,
             address(vrfV2Wrapper)
         );
+    }
+
+    function raiseNotDittoToMaxLevel(
+        address user,
+        uint256 notDittoTokenId
+    ) public {
+        uint256 times = 26 days / 3 hours - 3;
+        claimOfflineRewardWithPortion(times, notDittoTokenId, user);
+    }
+
+    function engageLottery(address user, uint256 notDittoTokenId) public {
+        uint256[4] memory lotteryNumber = [uint256(1), 2, 3, 4];
+        vm.prank(user);
+        notDittoCanFight.engageInLottery(notDittoTokenId, lotteryNumber);
     }
 }

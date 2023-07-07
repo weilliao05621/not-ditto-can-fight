@@ -64,16 +64,6 @@ contract SetUpTest is Test, MockOracle {
     address user4;
 
     function setUp() public virtual {
-        string memory SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
-        uint256 forkId = vm.createFork(SEPOLIA_RPC_URL);
-        vm.selectFork(forkId);
-
-        _setOracleMock(LINK_TOKEN_ADDRESS_OF_SEPOLIA);
-        notDittoCanFight = new NotDittoCanFight(
-            address(LINK_TOKEN_ADDRESS_OF_SEPOLIA),
-            address(vrfV2Wrapper)
-        );
-
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
         user3 = makeAddr("user3");
@@ -84,6 +74,21 @@ contract SetUpTest is Test, MockOracle {
         vm.label(user3, "user3");
         vm.label(user4, "user4");
 
+        nft = new FakeERC721();
+        _mintFakeERC721();
+    }
+
+    function forkFromSepolia() public {
+        string memory SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
+        uint256 forkId = vm.createFork(SEPOLIA_RPC_URL);
+        vm.selectFork(forkId);
+
+        _setOracleMock(LINK_TOKEN_ADDRESS_OF_SEPOLIA);
+        notDittoCanFight = new NotDittoCanFight(
+            address(LINK_TOKEN_ADDRESS_OF_SEPOLIA),
+            address(vrfV2Wrapper)
+        );
+
         address[] memory tokens = new address[](1);
         tokens[0] = LINK_TOKEN_ADDRESS_OF_SEPOLIA;
 
@@ -91,9 +96,14 @@ contract SetUpTest is Test, MockOracle {
         tos[0] = address(notDittoCanFight);
 
         _initAllBalances(tokens, tos);
+    }
 
-        nft = new FakeERC721();
-        _mintFakeERC721();
+    function localTesting() public {
+        notDittoCanFight = new NotDittoCanFight(
+            address(0),
+            address(0)
+        );
+        _initEther();
     }
 
     function _initEther() public {

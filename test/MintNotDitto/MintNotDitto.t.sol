@@ -10,7 +10,7 @@ contract TestMintNotDitto is Helper, ErrorConfig {
     function setUp() public override {
         super.setUp();
         // forkFromSepolia();
-        _initEther();
+        localTesting();
     }
 
     function test_mintNotDittoSigle() public {
