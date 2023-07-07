@@ -4,8 +4,6 @@ pragma solidity 0.8.19;
 import "./NFT/NotDittoAndItems.sol";
 import {LotteryAndFight} from "./Oracle/RandomNumber.sol";
 
-import {console} from "forge-std/console.sol";
-
 import "./libs/Level.sol";
 import "./libs/Lottery.sol";
 
@@ -102,8 +100,6 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
                 ++i;
             }
         }
-
-        console.log("reward: %s", reward);
 
         delete engagedLotteryList[msg.sender];
         delete engagedDrawByNotDittoIds[msg.sender];

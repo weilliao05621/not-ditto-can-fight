@@ -6,9 +6,6 @@ import {Helper} from "test/helper.t.sol";
 
 import {ErrorConfig} from "contracts/NFT/ErrorConfig.sol";
 
-// import {NotDittoConfig} from "contracts/NFT/NotDittoConfig.sol";
-
-// 要記得檢查 vault 價差
 contract TestClaimLotteryPrize is ErrorConfig, Helper {
     function setUp() public override {
         super.setUp();
