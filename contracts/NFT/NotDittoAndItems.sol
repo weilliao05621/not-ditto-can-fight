@@ -519,7 +519,7 @@ contract NotDittoAndItems is
         );
 
         notDittoInfos[id].owner = address(0);
-        currentOrphanNotDittos[currentOrphanNotDittos.length] = id;
+        currentOrphanNotDittos.push(id);
         morphedNftHash[nftInfoHash] = false;
 
         _transferNotDitto(owner, address(0), 1);
