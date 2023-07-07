@@ -370,6 +370,10 @@ contract NotDittoAndItems is
         _safeTransferFrom(address(0), msg.sender, NOT_DITTO, amount);
     }
 
+    function totalOrphans() public view returns (uint256) {
+        return currentOrphanNotDittos.length;
+    }
+
     function multicallTotalSupplies(
         uint256[] memory tokenIds
     ) external view returns (uint256[] memory amounts) {

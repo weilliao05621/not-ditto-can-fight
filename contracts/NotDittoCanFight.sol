@@ -207,9 +207,16 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
 
     function getLotteryNumberByEngagedNumber(
         uint256 draw,
+        address owner,
         uint256 tokenId
     ) public view returns (uint256[4] memory) {
-        bytes32 playerHash = keccak256(abi.encodePacked(msg.sender, tokenId));
+        bytes32 playerHash = keccak256(abi.encodePacked(owner, tokenId));
         return playerSnapshots[draw][playerHash].lotteryNumber;
+    }
+
+    function getEngagedLotteryList(
+        address owner
+    ) public view returns (uint256[3] memory) {
+        return engagedLotteryList[owner];
     }
 }
