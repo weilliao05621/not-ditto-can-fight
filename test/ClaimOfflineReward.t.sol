@@ -11,7 +11,7 @@ import {NotDittoConfig} from "contracts/NFT/NotDittoConfig.sol";
 // record: 28天(4 weeks)都每三小時領一次，會超過太多 > 41673600
 // record: 21天(3 weeks)都每三小時領一次，會到27等 > 22257600
 // record: 24.5天(3.5 weeks)都每三小時領一次，會到27等 > 27331200
-// record: 26天 都每三小時領一次，會到滿等 > 31161600
+// record: 26天 都每三小時領一次(205次)，會到滿等 > 31161600
 
 contract TestClaimOfflineReward is Helper, ErrorConfig, NotDittoConfig {
     function setUp() public override {

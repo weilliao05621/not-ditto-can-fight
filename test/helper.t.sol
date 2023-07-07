@@ -96,4 +96,18 @@ contract Helper is SetUpTest {
             address(vrfV2Wrapper)
         );
     }
+
+    function raiseNotDittoToMaxLevel(
+        address user,
+        uint256 notDittoTokenId
+    ) public {
+        uint256 times = 26 days / 3 hours - 3;
+        claimOfflineRewardWithPortion(times, notDittoTokenId, user);
+    }
+
+    function engageLottery(address user, uint256 notDittoTokenId) public {
+        uint256[4] memory lotteryNumber = [uint256(1), 2, 3, 4];
+        vm.prank(user);
+        notDittoCanFight.engageInLottery(notDittoTokenId, lotteryNumber);
+    }
 }
