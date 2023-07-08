@@ -9,11 +9,12 @@ library Lottery {
         uint256 prizeFactor;
 
         for (uint256 i = 0; i < lotteryNumber.length; ) {
-            if (drawNumber[i] == lotteryNumber[i]) {
-                prizeFactor += 1;
+            unchecked {
+                if (drawNumber[i] == lotteryNumber[i]) {
+                    prizeFactor += 1;
+                }
+                ++i;
             }
-            // prettier-ignore
-            unchecked { ++i; }
         }
 
         return prizeFactor;
