@@ -159,45 +159,20 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         // fixed array 會有起始長度，避免出現 index out of bounds
         uint256 engagedTickets = _engagedLotteryList.length;
         uint256 ticketIndex;
+        bool noTicketAllowed = false;
         for (uint256 i = 0; i < engagedTickets; i++) {
             if (_engagedLotteryList[i] == 0) {
                 ticketIndex = i;
                 break;
+            } else {
+                noTicketAllowed = i == 2;
             }
         }
 
+        require(!noTicketAllowed);
+
         engagedLotteryList[msg.sender][ticketIndex] = drawIndex;
         engagedDrawByNotDittoIds[msg.sender][ticketIndex] = tokenId;
-    }
-
-    function createNextDraw() public {
-        requestNewRandomNum();
-        payable(msg.sender).transfer(INIT_NEXT_DRAW_REWARD);
-    }
-
-    // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
-    // 如果已經有參加抽獎，則 NotDitto 也已經變成 orphan
-    function takeUnattendedNotDittoToOrphanage(uint256 id) public {
-        NotDittoInfo memory _info = notDittoInfos[id];
-        require(_info.owner != address(0));
-
-        NotDittoSnapshot memory _snapshot = notDittoSnapshots[id];
-
-        uint256 _offlineRewardStartAt = _snapshot.offlineRewardStartAt;
-
-        uint256 portion = Level._getOfflineRewardPortion(
-            block.timestamp - _offlineRewardStartAt
-        );
-        bool hasTooMuchPortion = portion /
-            Level.EXP_DECIMALS /
-            EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED >
-            0;
-
-        require(hasTooMuchPortion);
-
-        burnNotDitto(id, true);
-        // TODO: assign payment if one has took care of our NotDitto
-        payable(msg.sender).transfer(TAKE_CARE_NOT_DITTO_REWARD);
     }
 
     // === NotDitto Level === //
@@ -235,6 +210,37 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             notDittoSnapshots[tokenId].totalExp = updatedTotalExp;
             notDittoSnapshots[tokenId].effort = effort + 1;
         }
+    }
+
+    function createNextDraw() external {
+        // TODO: exchange ETH for LINK to pay for Chainlink VRF
+        requestNewRandomNum();
+        payable(msg.sender).transfer(INIT_NEXT_DRAW_REWARD);
+    }
+
+    // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
+    // 如果已經有參加抽獎，則 NotDitto 也已經變成 orphan
+    function takeUnattendedNotDittoToOrphanage(uint256 id) external {
+        NotDittoInfo memory _info = notDittoInfos[id];
+        require(_info.owner != address(0));
+
+        NotDittoSnapshot memory _snapshot = notDittoSnapshots[id];
+
+        uint256 _offlineRewardStartAt = _snapshot.offlineRewardStartAt;
+
+        uint256 portion = Level._getOfflineRewardPortion(
+            block.timestamp - _offlineRewardStartAt
+        );
+        bool hasTooMuchPortion = portion /
+            Level.EXP_DECIMALS /
+            EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED >
+            0;
+
+        require(hasTooMuchPortion);
+
+        burnNotDitto(id, true);
+        // TODO: assign payment if one has took care of our NotDitto
+        payable(msg.sender).transfer(TAKE_CARE_NOT_DITTO_REWARD);
     }
 
     // getter for fixed array
