@@ -18,11 +18,13 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
 
     uint256 public constant EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED = 7;
     uint256 public constant INIT_NEXT_DRAW_REWARD = 0.0001 ether;
+    uint256 public constant TAKE_CARE_NOT_DITTO_REWARD = MINT_PRICE / 10;
     // draw (drawIndex) => lotteryNumberHashByOwner => PlaySnapshot
     mapping(uint256 => mapping(bytes32 => PlaySnapshot)) public playerSnapshots;
     // owner => drawIndex(3)
     mapping(address => uint256[MAX_NOT_DITTO_SUPPLY_PER_ADDRESS])
         public engagedLotteryList;
+    // owner => notDittoId(3)
     mapping(address => uint256[MAX_NOT_DITTO_SUPPLY_PER_ADDRESS])
         public engagedDrawByNotDittoIds;
 
@@ -33,7 +35,7 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
 
     // === NotDitto Lottery === //
     function claimLotteryPrize() external {
-        if (vaultIsLocked()) {
+        if (address(this).balance <= 0.5 ether) {
             revert VaultIsLocked();
         }
 
@@ -76,7 +78,7 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             ];
 
             bool engaged = _playerSnapshot.engagedLottery;
-   
+
             if (!engaged) {
                 revert ErrorFromInteractWithNotDitto(
                     uint256(
@@ -104,22 +106,18 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         delete engagedLotteryList[msg.sender];
         delete engagedDrawByNotDittoIds[msg.sender];
 
-        payable(msg.sender).transfer(reward); // TODO: 改用 WETH 來進行
-    }
-
-    function vaultIsLocked() internal view returns (bool locked) {
-        locked = address(this).balance <= 0.5 ether;
+        payable(msg.sender).transfer(reward);
     }
 
     function engageInLottery(
         uint256 tokenId,
         uint256[4] memory lotteryNumber
     ) external {
-        if (vaultIsLocked()) {
+        if (address(this).balance <= 0.5 ether) {
             revert VaultIsLocked();
         }
 
-        if (!checkIsNotDittoOwner(tokenId)) {
+        if (msg.sender != ownerOf(tokenId)) {
             revert ErrorFromInteractWithNotDitto(
                 uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NOT_DITTO)
             );
@@ -137,8 +135,8 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
             );
         }
 
-        _burnNotDitto(tokenId, false);
-        // 因為有可能 adopt 同一個 tokenId 的 NotDitto，所以只用 owner + tokenId
+        burnNotDitto(tokenId, false);
+        // 因為有可能 adopt 同一個 tokenId 的 NotDitto，所以用 owner + tokenId
         bytes32 playerDrawHash = keccak256(
             abi.encodePacked(msg.sender, tokenId)
         );
@@ -157,54 +155,29 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         );
 
         uint256[3] memory _engagedLotteryList = engagedLotteryList[msg.sender];
-        // ensure to start at 0 without conquering index out of bounds
-        // since fixed array will be initialized with all storage filled. e.g. uint256[3] will have [0,0,0] which has length of 3
+
+        // fixed array 會有起始長度，避免出現 index out of bounds
         uint256 engagedTickets = _engagedLotteryList.length;
         uint256 ticketIndex;
+        bool noTicketAllowed = false;
         for (uint256 i = 0; i < engagedTickets; i++) {
             if (_engagedLotteryList[i] == 0) {
                 ticketIndex = i;
                 break;
+            } else {
+                noTicketAllowed = i == 2;
             }
         }
+
+        require(!noTicketAllowed);
 
         engagedLotteryList[msg.sender][ticketIndex] = drawIndex;
         engagedDrawByNotDittoIds[msg.sender][ticketIndex] = tokenId;
     }
 
-    function createNextDraw() public {
-        requestNewRandomNum();
-        // TODO: assign payment if one has create new draw
-        payable(msg.sender).transfer(INIT_NEXT_DRAW_REWARD);
-    }
-
-    // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
-    // 如果已經有參加抽獎，則 NotDitto 也已經變成 orphan
-    function takeUnattendedNotDittoToOrphanage(uint256 id) public {
-        NotDittoInfo memory _info = notDittoInfos[id];
-        require(_info.owner != address(0));
-
-        NotDittoSnapshot memory _snapshot = notDittoSnapshots[id];
-
-        uint256 _offlineRewardStartAt = _snapshot.offlineRewardStartAt;
-
-        uint256 portion = Level._getOfflineRewardPortion(
-            block.timestamp - _offlineRewardStartAt
-        );
-        bool hasTooMuchPortion = portion /
-            Level.EXP_DECIMALS /
-            EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED >
-            0;
-
-        require(hasTooMuchPortion);
-
-        _burnNotDitto(id, true);
-        // TODO: assign payment if one has took care of our NotDitto
-    }
-
     // === NotDitto Level === //
     function claimOfflineReward(uint256 tokenId) external payable {
-        if (!checkIsNotDittoOwner(tokenId)) {
+        if (msg.sender != ownerOf(tokenId)) {
             revert ErrorFromInteractWithNotDitto(
                 uint256(ErrorNotDitto.NOT_OWNER_OF_THE_NOT_DITTO)
             );
@@ -239,6 +212,38 @@ contract NotDittoCanFight is NotDittoAndItems, LotteryAndFight {
         }
     }
 
+    function createNextDraw() external {
+        // TODO: exchange ETH for LINK to pay for Chainlink VRF
+        requestNewRandomNum();
+        payable(msg.sender).transfer(INIT_NEXT_DRAW_REWARD);
+    }
+
+    // 讓遊戲能繼續的機制：確實有可能有人把 NFT 賣了，卻忘記自己有 mint 過 NotDitto
+    // 如果已經有參加抽獎，則 NotDitto 也已經變成 orphan
+    function takeUnattendedNotDittoToOrphanage(uint256 id) external {
+        NotDittoInfo memory _info = notDittoInfos[id];
+        require(_info.owner != address(0));
+
+        NotDittoSnapshot memory _snapshot = notDittoSnapshots[id];
+
+        uint256 _offlineRewardStartAt = _snapshot.offlineRewardStartAt;
+
+        uint256 portion = Level._getOfflineRewardPortion(
+            block.timestamp - _offlineRewardStartAt
+        );
+        bool hasTooMuchPortion = portion /
+            Level.EXP_DECIMALS /
+            EXCEED_DAYS_MAKE_NOT_DITTO_UNATTENDED >
+            0;
+
+        require(hasTooMuchPortion);
+
+        burnNotDitto(id, true);
+        // TODO: assign payment if one has took care of our NotDitto
+        payable(msg.sender).transfer(TAKE_CARE_NOT_DITTO_REWARD);
+    }
+
+    // getter for fixed array
     function getLotteryNumberByEngagedNumber(
         uint256 draw,
         address owner,

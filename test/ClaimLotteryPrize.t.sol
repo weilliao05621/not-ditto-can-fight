@@ -59,7 +59,7 @@ contract TestClaimLotteryPrize is ErrorConfig, Helper {
         assertFalse(engagedLottery, "CLAIM-PRIZE: SHOULD_NOT_BE_ENGAGED");
 
         for (uint256 i = 0; i < 3; i++) {
-            uint256 drawIndex = notDittoCanFight.engagedLotteryList(user1, i);
+            drawIndex = notDittoCanFight.engagedLotteryList(user1, i);
             assertEq(
                 drawIndex,
                 0,
@@ -106,11 +106,11 @@ contract TestClaimLotteryPrize is ErrorConfig, Helper {
         // prettier-ignore
         bytes32 playerDrawHash2 = keccak256(abi.encodePacked(msg.sender, uint256(2)));
 
-        (, bool engagedLottery1) = notDittoCanFight.playerSnapshots(
+        (, engagedLottery1) = notDittoCanFight.playerSnapshots(
             drawIndex,
             playerDrawHash1
         );
-        (, bool engagedLottery2) = notDittoCanFight.playerSnapshots(
+        (, engagedLottery2) = notDittoCanFight.playerSnapshots(
             drawIndex,
             playerDrawHash2
         );
