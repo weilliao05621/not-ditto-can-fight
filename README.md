@@ -1,8 +1,16 @@
 # Not Ditto Can Fight
 
-Treat your NFT not only as a life-time collection but also a unique ticket to JOIN THIS LOTTERY GAME!
+![NotDittoCanFight Banner](./README/images/not-ditto-can-fight.svg)
+
+Treat your NFT not only as a life-time collection but also a unique ticket to JOIN THIS LOTTERY GAME via RAISING SIMS!
 
 ## Description
+
+### Why ERC1155?
+- NotDitto is ERC20-liked ERC721 token while LuckyStar would be ERC20 one. For realizing the mechanism of minting the NotDitto and multiple artifacts, ERC1155 would be the best practice for the implementation.
+- Though ERC721A would probably be the best practice to implement a gas-efficient ERC721 token when it comes to minting ERC721 in batch, the mechanism of minting NotDitto heavily depends on transfering after all new-born was minted. Therefore, it would cost more gas after reaching limit number of the total supply of NotDitto.
+
+### Features
 
 | Available Features                                                      |
 | ----------------------------------------------------------------------- |
@@ -10,7 +18,6 @@ Treat your NFT not only as a life-time collection but also a unique ticket to JO
 | Each Not-Ditto NFT will have it own elemental attribute                 |
 | Gain experience points by claiming offline rewards with raise fee       |
 | Reach LV.30 to participate in lottery draws for incredible prizes       |
-| Utilize referral code to speed by leveling processing with your friends |
 
 | Future Features                                                                |
 | ------------------------------------------------------------------------------ |
@@ -18,10 +25,10 @@ Treat your NFT not only as a life-time collection but also a unique ticket to JO
 | Take your friends' NotDittos to fight in arena to gain Lucky stars by approval |
 | Use Lucky stars to make your NotDitto grow  incredibly fast                    |
 | Trade or Make up pieces of Lucky stars with other players                      |
+| Utilize referral code to speed by leveling processing with your friends        |
 
 ## Notes
 
-- We will check the ownership of the NFT you provided to mint the Not-Ditto whenever you want to gain offline rewards, step into arena, or use referral code or artifacts
 - Each player has limited batch size and mint amount according to Not Ditto Can Fight's setting
 - Not-Ditto NFT **CAN'T** be transfered. We hope you take good care of your own Not-Ditto and ensure your Not-Ditto won't get lose in any cases.
 
@@ -34,7 +41,7 @@ The [`NotDittoCanFight.sol`](./contracts/NotDittoCanFight.sol) is the main entry
 In addition, most calculations for claiming level or lottery prize are separated in [`Level.sol`]('./contracts/libs/Level.sol') and [`Lottery.sol`]('./contracts/libs/Lottery.sol'). 
 
 #### **NotDittoCanFight.sol**
-The core game contract for engaging in the games and claiming prizes. To level up a NotDitto, a player should wait for certain time to get portion and claim for offline rewards. By repeating the raising process, a 30-leveled NotDitto accesses to the lottery draw. Moreover, each address (yes, you don't have to be a player) have ability to create a pending new draw or take the unattended NotDitto to the orphanage to gain rewards.     
+The core game contract for engaging in the games and claiming prizes. To level up a NotDitto, a player should wait for certain time to get portion and claim for offline rewards. By repeating the raising process, a 30-leveled NotDitto accesses to the lottery draw. Moreover, even not a player, you still have ability to create a pending new draw or take the unattended NotDitto to the orphanage. By helping the game operation, you can earn extra rewards.     
 
 *Note*:       
 1. Experience point has decimals with 3 due to the number of time in Solidity is not supported for ms and the calculation for leveling will have 3 float points. By doing so, players can have more flexibility of accumulating offline reward.     
@@ -46,7 +53,7 @@ The core game contract for engaging in the games and claiming prizes. To level u
 |--------|-----------------------------------------------------------------------------------------------------------------------------------------------|
 |`claimOfflineReward` (uint256 tokenId) external payable | pay raise fee (2.5% of mint fee) to claim exp for a NotDitto                                  |
 |`engageInLottery` (uint256 tokenId, uint256[4] memory lotteryNumber) external | take a 30-leveled NotDitto to the draw and it will be burned            |
-|`claimLotteryPrize` () external | claim reward of all engaged tickets (prize will range in 0.8, 1, 1.2, 2, 5, see more in Lottery.sol in libs)          |
+|`claimLotteryPrize` () external | claim reward of all engaged tickets (prize will range in 0.8, 1, 1.2, 5, 10. see more in [Lottery.sol](./contracts/libs/Lottery.sol) in libs)          |
 |`createNextDraw` () external | request new randomess from Chainlink and will create a pending new draw till randomess is received                       |
 |`takeUnattendedNotDittoToOrphanage` (uint256 id) external | take NotDitto to orphanage if it has been unattended for 7 days (enable everyone to burn it)|
 
